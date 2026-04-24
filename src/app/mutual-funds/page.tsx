@@ -14,7 +14,7 @@ interface Fund {
   units: number;
 }
 
-// Fallback data for popular funds (if API fails) - Updated NAVs
+// Fallback data for popular funds (if API fails)
 const FALLBACK_FUNDS: Record<string, { name: string; nav: number; date: string }> = {
   '120503': { name: 'Parag Parikh Flexi Cap Fund - Direct Plan - Growth', nav: 68.42, date: new Date().toISOString().split('T')[0] },
   '120716': { name: 'UTI Nifty 50 Index Fund - Direct Plan - Growth', nav: 185.23, date: new Date().toISOString().split('T')[0] },
@@ -94,7 +94,6 @@ export default function MutualFundsPage() {
     } catch (e) {
       console.log('API failed, using fallback');
     }
-    // Fallback to mock data
     return FALLBACK_FUNDS[code] || null;
   };
 
@@ -141,7 +140,6 @@ export default function MutualFundsPage() {
     setFunds(prev => [...prev, newFund]);
     setMessage('Fund added successfully!');
     
-    // Reset & close
     setSchemeCode('');
     setInvestedAmount('');
     setUnits('');
@@ -229,7 +227,7 @@ export default function MutualFundsPage() {
   const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
   
   const fmtDate = (d: string) => 
-    new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 
   // Filter funds
   const filtered = funds.filter(f => 
@@ -315,71 +313,84 @@ export default function MutualFundsPage() {
           </div>
         )}
 
-        {/* Funds Table */}
+        {/* Funds List - MOBILE OPTIMIZED CARDS */}
         {filtered.length > 0 ? (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300">
-                  <tr>
-                    <th className="p-3 font-medium">Fund</th>
-                    <th className="p-3 font-medium text-right">Invested</th>
-                    <th className="p-3 font-medium text-right">Current</th>
-                    <th className="p-3 font-medium text-right">P/L</th>
-                    <th className="p-3 font-medium text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {filtered.map(fund => {
-                    const current = fund.units * fund.nav;
-                    const pl = current - fund.investedAmount;
-                    const isProfit = pl >= 0;
-                    return (
-                      <tr key={fund.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                        <td className="p-3">
-                          <p className="font-medium text-gray-900 dark:text-white line-clamp-2">{fund.fundName}</p>
-                          <p className="text-xs text-green-600 dark:text-green-400 font-medium mt-0.5">
-                            NAV: ₹{fund.nav.toFixed(2)} <span className="text-gray-400">• {fmtDate(fund.navDate)}</span>
-                          </p>
-                          <p className="text-xs text-gray-400">{fund.schemeCode}</p>
-                        </td>
-                        <td className="p-3 text-right font-medium">{fmtMoney(fund.investedAmount)}</td>
-                        <td className="p-3 text-right font-medium">{fmtMoney(current)}</td>
-                        <td className={`p-3 text-right font-medium ${isProfit ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                          {isProfit ? '+' : ''}{fmtMoney(pl)}
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center justify-center gap-1">
-                            <button 
-                              onClick={() => handleRefresh(fund)}
-                              disabled={refreshing === fund.schemeCode}
-                              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
-                              title="Refresh NAV"
-                            >
-                              <RefreshCw className={`w-4 h-4 ${refreshing === fund.schemeCode ? 'animate-spin' : ''}`} />
-                            </button>
-                            <button 
-                              onClick={() => handleEditClick(fund)}
-                              className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                              title="Edit Fund"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(fund.id)}
-                              className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                              title="Delete Fund"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          <div className="space-y-3">
+            {filtered.map(fund => {
+              const current = fund.units * fund.nav;
+              const pl = current - fund.investedAmount;
+              const isProfit = pl >= 0;
+              
+              return (
+                <div key={fund.id} className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
+                  {/* Fund Header */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2">{fund.fundName}</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{fund.schemeCode}</p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button 
+                        onClick={() => handleRefresh(fund)}
+                        disabled={refreshing === fund.schemeCode}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                        title="Refresh NAV"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${refreshing === fund.schemeCode ? 'animate-spin' : ''}`} />
+                      </button>
+                      <button 
+                        onClick={() => handleEditClick(fund)}
+                        className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        title="Edit Fund"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(fund.id)}
+                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title="Delete Fund"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* NAV & Date */}
+                  <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">NAV</p>
+                      <p className="font-semibold text-green-600 dark:text-green-400">₹{fund.nav.toFixed(2)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Updated</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-300">{fmtDate(fund.navDate)}</p>
+                    </div>
+                  </div>
+
+                  {/* Stats Grid - 2x2 */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Invested</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{fmtMoney(fund.investedAmount)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Current</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{fmtMoney(current)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Units</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{fund.units.toFixed(3)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">P/L</p>
+                      <p className={`font-bold ${isProfit ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {isProfit ? '+' : ''}{fmtMoney(pl)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : funds.length > 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -520,7 +531,6 @@ export default function MutualFundsPage() {
             </div>
 
             <form onSubmit={handleSaveEdit} className="p-4 space-y-4">
-              {/* Fund Info (Read-only) */}
               <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">{editingFund.fundName}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -528,7 +538,6 @@ export default function MutualFundsPage() {
                 </p>
               </div>
 
-              {/* Editable Fields */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Invested Amount (₹)</label>
@@ -564,41 +573,22 @@ export default function MutualFundsPage() {
         </div>
       )}
 
-      {/* Bottom Navigation - FULLY FUNCTIONAL */}
+      {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-3 z-40" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
         <div className="flex justify-around items-center">
-          {/* Home Link - Working */}
-          <a 
-            href="/" 
-            className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-          >
+          <a href="/" className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
             <Home size={20} />
             <span className="text-xs">Home</span>
           </a>
-          
-          {/* Mutual Funds Link - Active */}
-          <a 
-            href="/mutual-funds" 
-            className="flex flex-col items-center gap-1 text-green-500"
-          >
+          <a href="/mutual-funds" className="flex flex-col items-center gap-1 text-green-500">
             <TrendingUp size={20} />
             <span className="text-xs">MF</span>
           </a>
-          
-          {/* NPS Link - Working */}
-          <a 
-            href="/nps" 
-            className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-          >
+          <a href="/nps" className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
             <Shield size={20} />
             <span className="text-xs">NPS</span>
           </a>
-          
-          {/* FD Link - Working */}
-          <a 
-            href="/fd" 
-            className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-          >
+          <a href="/fd" className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
             <Percent size={20} />
             <span className="text-xs">FD</span>
           </a>
