@@ -77,11 +77,9 @@ export default function FDPage() {
     const quarterlyRate = rate / 4 / 100;
     const quarters = years * 4;
     
-    // Compound Interest Formula: A = P(1 + r/n)^(nt)
     const maturity = principal * Math.pow(1 + quarterlyRate, quarters);
     const interest = maturity - principal;
     
-    // Calculate maturity date
     const startDt = new Date(start);
     const maturityDt = new Date(startDt);
     maturityDt.setMonth(maturityDt.getMonth() + months);
@@ -232,7 +230,7 @@ export default function FDPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center">
-                <Percent className="text-white" size={20} />
+                <IndianRupee className="text-white" size={20} />
               </div>
               <div>
                 <h1 className="text-lg font-bold">MY FD</h1>
@@ -266,7 +264,7 @@ export default function FDPage() {
         {fds.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 text-center border border-gray-200 dark:border-gray-700">
             <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Percent className="text-orange-600 dark:text-orange-400" size={32} />
+              <IndianRupee className="text-orange-600 dark:text-orange-400" size={32} />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No FDs Yet</h3>
             <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
@@ -362,7 +360,7 @@ export default function FDPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-gray-500 dark:text-gray-400">Maturity Amount</p>
-                        <p className="font-medium text-green-600 dark:text-green-400">{fmtMoney(parseFloat(fd.maturityAmount))}</p>
+                        <p className="font-medium text-green-600 dark:text-green-400">{fmtMoney(fd.maturityAmount)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Start Date</p>
@@ -376,7 +374,7 @@ export default function FDPage() {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-xs text-gray-500 dark:text-gray-400">Interest Earned</p>
-                            <p className="font-medium text-green-600 dark:text-green-400">+{fmtMoney(parseFloat(fd.interestEarned))}</p>
+                            <p className="font-medium text-green-600 dark:text-green-400">+{fmtMoney(fd.interestEarned)}</p>
                           </div>
                           {!matured && (
                             <div className="text-right">
