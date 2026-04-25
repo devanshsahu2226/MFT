@@ -3,6 +3,8 @@ import { TrendingUp, TrendingDown, RefreshCw, Home, Shield, Percent, IndianRupee
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import ProfileModal from '@/components/ProfileModal';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation'; 
 
 interface MFData {
   investedAmount: number;
@@ -20,6 +22,18 @@ interface FDData {
 }
 
 export default function HomePage() {
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/auth');
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
   const [currentTime, setCurrentTime] = useState('');
   const [animated, setAnimated] = useState(false);
   const [refreshing, setRefreshing] = useState(false);

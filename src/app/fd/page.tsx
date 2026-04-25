@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Plus, Trash2, Edit2, RefreshCw, Home, Shield, Percent, X, Check, ChevronRight, ChevronLeft, AlertCircle, Calendar, IndianRupee } from 'lucide-react';
 import Link from 'next/link';
 import ProfileModal from '@/components/ProfileModal';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 
 interface FD {
   id: string;
@@ -20,6 +22,18 @@ interface FD {
 }
 
 export default function FDPage() {
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/auth');
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
   const [fds, setFds] = useState<FD[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);

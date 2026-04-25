@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, RefreshCw, Plus, Trash2, Search, Loader2, AlertCircle, Home, Shield, Percent, X, Check, Edit2, Save } from 'lucide-react';
 import Link from 'next/link';
 import ProfileModal from '@/components/ProfileModal';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 
 interface Fund {
   id: string;
@@ -24,6 +26,18 @@ const FALLBACK_FUNDS: Record<string, { name: string; nav: number; date: string }
 };
 
 export default function MutualFundsPage() {
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/auth');
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
   const [funds, setFunds] = useState<Fund[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState<string | null>(null);
