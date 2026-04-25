@@ -14,7 +14,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // ✅ FIXED: Redirect inside useEffect (not during render)
   useEffect(() => {
     if (isAuthenticated) {
       router.push('/');
@@ -26,7 +25,6 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    // Simple validation
     if (!username || !password) {
       setError('Please fill all fields');
       setLoading(false);
@@ -45,7 +43,6 @@ export default function LoginPage() {
       return;
     }
 
-    // Simulate login (in real app, verify password)
     setTimeout(() => {
       login(username);
       router.push('/');
@@ -53,10 +50,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4 overflow-hidden">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <div className="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <TrendingUp className="text-white" size={32} />
           </div>
@@ -65,7 +62,7 @@ export default function LoginPage() {
         </div>
 
         {/* Login Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 max-h-[calc(100vh-200px)] overflow-y-auto">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Sign In</h2>
 
           {error && (

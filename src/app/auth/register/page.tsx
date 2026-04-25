@@ -16,14 +16,12 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // ✅ FIXED: Redirect inside useEffect
   useEffect(() => {
     if (isAuthenticated) {
       router.push('/');
     }
   }, [isAuthenticated, router]);
 
-  // Auto-format DD/MM/YYYY
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '');
     if (value.length > 8) value = value.slice(0, 8);
@@ -37,7 +35,6 @@ export default function RegisterPage() {
     setJoinedDate(value);
   };
 
-  // Validate DD/MM/YYYY
   const validateDate = (date: string): boolean => {
     const regex = /^\d{2}\/\d{2}\/\d{4}$/;
     if (!regex.test(date)) return false;
@@ -91,10 +88,10 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4 overflow-hidden">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <div className="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <TrendingUp className="text-white" size={32} />
           </div>
@@ -103,7 +100,7 @@ export default function RegisterPage() {
         </div>
 
         {/* Register Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 max-h-[calc(100vh-200px)] overflow-y-auto">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Get Started</h2>
 
           {error && (
