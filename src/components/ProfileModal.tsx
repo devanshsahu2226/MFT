@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
-import { LogOut, Settings, Palette, Mail, Info, Moon, Sun, Monitor } from 'lucide-react';
+import { LogOut, Settings, Palette, Mail, Info, Moon, Sun, Monitor, Check } from 'lucide-react';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -13,7 +13,7 @@ interface ProfileModalProps {
 export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: ProfileModalProps) {
   const [mounted, setMounted] = useState(false);
   const [showThemeOptions, setShowThemeOptions] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
 
   useEffect(() => {
     setMounted(true);
@@ -39,8 +39,14 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
 
   const handleThemeChange = (newTheme: string) => {
     setTheme(newTheme);
-    localStorage.setItem('app-theme', newTheme);
     setShowThemeOptions(false);
+    
+    // Force save to localStorage
+    try {
+      localStorage.setItem('mutualtrack-theme', newTheme);
+    } catch (e) {
+      console.log('localStorage not available');
+    }
   };
 
   const fmtCompact = (n: number) => {
@@ -99,7 +105,7 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
               </svg>
             </button>
 
-            {/* App Theme Button - Now Clickable */}
+            {/* App Theme Button */}
             <button 
               onClick={() => setShowThemeOptions(!showThemeOptions)}
               className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -109,7 +115,9 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
                 <span className="text-sm text-gray-700 dark:text-gray-300">App Theme</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">{theme || 'System'}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                  {resolvedTheme || theme || 'light'}
+                </span>
                 <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
@@ -118,7 +126,7 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
 
             {/* Theme Options Dropdown */}
             {showThemeOptions && (
-              <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl space-y-2">
                 <button
                   onClick={() => handleThemeChange('light')}
                   className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${theme === 'light' ? 'bg-white dark:bg-gray-600 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-gray-600/50'}`}
@@ -128,7 +136,7 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
                     <p className="text-sm font-medium text-gray-900 dark:text-white">Light</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Always use light theme</p>
                   </div>
-                  {theme === 'light' && <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
+                  {theme === 'light' && <Check size={20} className="text-green-500" />}
                 </button>
 
                 <button
@@ -140,19 +148,7 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
                     <p className="text-sm font-medium text-gray-900 dark:text-white">Dark</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Always use dark theme</p>
                   </div>
-                  {theme === 'dark' && <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
-                </button>
-
-                <button
-                  onClick={() => handleThemeChange('system')}
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${theme === 'system' ? 'bg-white dark:bg-gray-600 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-gray-600/50'}`}
-                >
-                  <Monitor size={18} className="text-gray-500" />
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">System</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Use device theme</p>
-                  </div>
-                  {theme === 'system' && <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
+                  {theme === 'dark' && <Check size={20} className="text-green-500" />}
                 </button>
               </div>
             )}
