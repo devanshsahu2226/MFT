@@ -64,8 +64,8 @@ export default function FDPage() {
   }, [showModal, showProfile]);
 
   const totalInvested = fds.reduce((sum, fd) => sum + fd.principalAmount, 0);
-  const totalCurrentValue = fds.reduce((sum, fd) => sum + parseFloat(fd.maturityAmount.toString()), 0);
-  const totalInterestEarned = fds.reduce((sum, fd) => sum + parseFloat(fd.interestEarned.toString()), 0);
+  const totalCurrentValue = fds.reduce((sum, fd) => sum + fd.maturityAmount, 0);
+  const totalInterestEarned = fds.reduce((sum, fd) => sum + fd.interestEarned, 0);
   const totalReturnPercent = totalInvested > 0 ? (totalInterestEarned / totalInvested) * 100 : 0;
 
   const calculateFD = (principal: number, rate: number, months: number, start: string) => {
@@ -320,7 +320,7 @@ export default function FDPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-gray-500 dark:text-gray-400">Maturity Amount</p>
-                        <p className="font-medium text-green-600 dark:text-green-400">{fmtMoney(parseFloat(fd.maturityAmount))}</p>
+                        <p className="font-medium text-green-600 dark:text-green-400">{fmtMoney(fd.maturityAmount)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Start Date</p>
@@ -334,7 +334,7 @@ export default function FDPage() {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-xs text-gray-500 dark:text-gray-400">Interest Earned</p>
-                            <p className="font-medium text-green-600 dark:text-green-400">+{fmtMoney(parseFloat(fd.interestEarned))}</p>
+                            <p className="font-medium text-green-600 dark:text-green-400">+{fmtMoney(fd.interestEarned)}</p>
                           </div>
                           {!matured && (
                             <div className="text-right">
