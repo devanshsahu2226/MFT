@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, RefreshCw, Plus, Trash2, Search, Loader2, AlertCircle, Home, Shield, Percent, X, Check, Edit2, Save } from 'lucide-react';
+import Link from 'next/link';
+import ProfileModal from '@/components/ProfileModal';
 
-// Types
 interface Fund {
   id: string;
   schemeCode: string;
@@ -14,7 +15,6 @@ interface Fund {
   units: number;
 }
 
-// Fallback data for popular funds (if API fails)
 const FALLBACK_FUNDS: Record<string, { name: string; nav: number; date: string }> = {
   '120503': { name: 'Parag Parikh Flexi Cap Fund - Direct Plan - Growth', nav: 68.42, date: new Date().toISOString().split('T')[0] },
   '120716': { name: 'UTI Nifty 50 Index Fund - Direct Plan - Growth', nav: 185.23, date: new Date().toISOString().split('T')[0] },
@@ -29,8 +29,8 @@ export default function MutualFundsPage() {
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
   
-  // Add Modal State
   const [showAddModal, setShowAddModal] = useState(false);
   const [schemeCode, setSchemeCode] = useState('');
   const [fetchingFund, setFetchingFund] = useState(false);
@@ -38,7 +38,6 @@ export default function MutualFundsPage() {
   const [investedAmount, setInvestedAmount] = useState('');
   const [units, setUnits] = useState('');
   
-  // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingFund, setEditingFund] = useState<Fund | null>(null);
   const [editAmount, setEditAmount] = useState('');
@@ -46,7 +45,6 @@ export default function MutualFundsPage() {
   
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Load from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem('mf_tracker_funds');
@@ -54,32 +52,30 @@ export default function MutualFundsPage() {
     } catch (e) { console.error('Load error:', e); }
   }, []);
 
-  // Save to localStorage whenever funds change
   useEffect(() => {
     try {
       localStorage.setItem('mf_tracker_funds', JSON.stringify(funds));
+      window.dispatchEvent(new Event('storage'));
     } catch (e) { console.error('Save error:', e); }
   }, [funds]);
 
-  // Close modals on Escape key
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setShowAddModal(false);
         setShowEditModal(false);
+        setShowProfile(false);
       }
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
   }, []);
 
-  // Calculate summaries
   const totalInvested = funds.reduce((sum, f) => sum + f.investedAmount, 0);
   const totalCurrentValue = funds.reduce((sum, f) => sum + (f.units * f.nav), 0);
   const totalProfitLoss = totalCurrentValue - totalInvested;
   const totalReturnPercent = totalInvested > 0 ? (totalProfitLoss / totalInvested) * 100 : 0;
 
-  // Fetch fund from API with fallback
   const fetchFundData = async (code: string): Promise<{ name: string; nav: number; date: string } | null> => {
     try {
       const res = await fetch(`https://api.mfapi.in/mf/${code}`, { cache: 'no-store' });
@@ -91,13 +87,10 @@ export default function MutualFundsPage() {
           date: json.data[0].date,
         };
       }
-    } catch (e) {
-      console.log('API failed, using fallback');
-    }
+    } catch (e) { console.log('API failed, using fallback'); }
     return FALLBACK_FUNDS[code] || null;
   };
 
-  // Auto-fetch fund name when code is entered
   const handleCodeBlur = async () => {
     if (!schemeCode.trim() || schemeCode.length < 5) return;
     setFetchingFund(true);
@@ -114,7 +107,6 @@ export default function MutualFundsPage() {
     setTimeout(() => { setError(null); setMessage(null); }, 4000);
   };
 
-  // Add fund handler
   const handleAddFund = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -150,7 +142,6 @@ export default function MutualFundsPage() {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  // Open edit modal
   const handleEditClick = (fund: Fund) => {
     setEditingFund(fund);
     setEditAmount(fund.investedAmount.toString());
@@ -158,7 +149,6 @@ export default function MutualFundsPage() {
     setShowEditModal(true);
   };
 
-  // Save edited fund
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingFund || !editAmount || !editUnits) return;
@@ -175,7 +165,6 @@ export default function MutualFundsPage() {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  // Delete fund
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this fund?')) {
       setFunds(prev => prev.filter(f => f.id !== id));
@@ -184,7 +173,6 @@ export default function MutualFundsPage() {
     }
   };
 
-  // Refresh single fund NAV from API
   const handleRefresh = async (fund: Fund) => {
     setRefreshing(fund.schemeCode);
     const data = await fetchFundData(fund.schemeCode);
@@ -201,7 +189,6 @@ export default function MutualFundsPage() {
     setRefreshing(null);
   };
 
-  // Refresh all funds NAV
   const handleRefreshAll = async () => {
     if (funds.length === 0) return;
     setLoading(true);
@@ -220,16 +207,10 @@ export default function MutualFundsPage() {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  // Format helpers
-  const fmtMoney = (n: number) => 
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
-  
+  const fmtMoney = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
   const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
-  
-  const fmtDate = (d: string) => 
-    new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 
-  // Filter funds
   const filtered = funds.filter(f => 
     f.fundName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     f.schemeCode.includes(searchQuery)
@@ -238,33 +219,23 @@ export default function MutualFundsPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       
-      {/* Fixed Header */}
       <header className="fixed top-0 left-0 right-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-40" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center">
+              <button onClick={() => setShowProfile(true)} className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center hover:bg-green-600 transition-colors">
                 <TrendingUp className="text-white" size={20} />
-              </div>
+              </button>
               <div>
                 <h1 className="text-lg font-bold">Mutual Funds</h1>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{funds.length} funds</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button 
-                onClick={() => setShowAddModal(true)}
-                className="p-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-colors"
-                title="Add Fund"
-              >
+              <button onClick={() => setShowAddModal(true)} className="p-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-colors">
                 <Plus size={20} />
               </button>
-              <button 
-                onClick={handleRefreshAll}
-                disabled={loading || funds.length === 0}
-                className="p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
-                title="Refresh All NAV"
-              >
+              <button onClick={handleRefreshAll} disabled={loading || funds.length === 0} className="p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50">
                 <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
               </button>
             </div>
@@ -272,10 +243,8 @@ export default function MutualFundsPage() {
         </div>
       </header>
 
-      {/* Scrollable Content */}
       <main className="pt-[100px] pb-24 px-4 space-y-4" style={{ paddingBottom: 'max(24px, calc(24px + env(safe-area-inset-bottom)))' }}>
         
-        {/* Summary Cards */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-500 dark:text-gray-400">Invested</p>
@@ -299,21 +268,13 @@ export default function MutualFundsPage() {
           </div>
         </div>
 
-        {/* Search */}
         {funds.length > 0 && (
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search funds..."
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-            />
+            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search funds..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm" />
           </div>
         )}
 
-        {/* Funds List - MOBILE OPTIMIZED CARDS */}
         {filtered.length > 0 ? (
           <div className="space-y-3">
             {filtered.map(fund => {
@@ -323,39 +284,24 @@ export default function MutualFundsPage() {
               
               return (
                 <div key={fund.id} className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
-                  {/* Fund Header */}
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2">{fund.fundName}</h3>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{fund.schemeCode}</p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      <button 
-                        onClick={() => handleRefresh(fund)}
-                        disabled={refreshing === fund.schemeCode}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
-                        title="Refresh NAV"
-                      >
+                      <button onClick={() => handleRefresh(fund)} disabled={refreshing === fund.schemeCode} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50">
                         <RefreshCw className={`w-4 h-4 ${refreshing === fund.schemeCode ? 'animate-spin' : ''}`} />
                       </button>
-                      <button 
-                        onClick={() => handleEditClick(fund)}
-                        className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                        title="Edit Fund"
-                      >
+                      <button onClick={() => handleEditClick(fund)} className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
                         <Edit2 size={14} />
                       </button>
-                      <button 
-                        onClick={() => handleDelete(fund.id)}
-                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                        title="Delete Fund"
-                      >
+                      <button onClick={() => handleDelete(fund.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
                         <Trash2 size={14} />
                       </button>
                     </div>
                   </div>
 
-                  {/* NAV & Date */}
                   <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">NAV</p>
@@ -367,7 +313,6 @@ export default function MutualFundsPage() {
                     </div>
                   </div>
 
-                  {/* Stats Grid - 2x2 */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">Invested</p>
@@ -393,16 +338,11 @@ export default function MutualFundsPage() {
             })}
           </div>
         ) : funds.length > 0 ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            No funds match your search
-          </div>
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">No funds match your search</div>
         ) : (
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 text-center border border-gray-200 dark:border-gray-700">
             <p className="text-gray-500 dark:text-gray-400 mb-2">No funds added yet</p>
-            <button 
-              onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
-            >
+            <button onClick={() => setShowAddModal(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors">
               <Plus size={16} /> Add Your First Fund
             </button>
             <p className="text-xs text-gray-400 mt-4">Try code: 122639 (HDFC Nifty 50)</p>
@@ -410,13 +350,33 @@ export default function MutualFundsPage() {
         )}
       </main>
 
+      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-3 z-40" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+        <div className="flex justify-around items-center">
+          <Link href="/" className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <Home size={20} />
+            <span className="text-xs">Home</span>
+          </Link>
+          <Link href="/mutual-funds" className="flex flex-col items-center gap-1 text-green-500">
+            <TrendingUp size={20} />
+            <span className="text-xs">MF</span>
+          </Link>
+          <Link href="/nps" className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <Shield size={20} />
+            <span className="text-xs">NPS</span>
+          </Link>
+          <Link href="/fd" className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <Percent size={20} />
+            <span className="text-xs">FD</span>
+          </Link>
+        </div>
+      </nav>
+
+      <ProfileModal isOpen={showProfile} onClose={() => setShowProfile(false)} totalAssets={totalCurrentValue} />
+
       {/* Add Fund Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowAddModal(false)}>
-          <div 
-            className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Add New Fund</h3>
               <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
@@ -439,21 +399,8 @@ export default function MutualFundsPage() {
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">AMFI Scheme Code</label>
                 <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={schemeCode}
-                    onChange={e => { setSchemeCode(e.target.value); setFundDetails(null); }}
-                    onBlur={handleCodeBlur}
-                    placeholder="e.g., 122639"
-                    className="flex-1 p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCodeBlur}
-                    disabled={fetchingFund || !schemeCode.trim()}
-                    className="px-4 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50"
-                  >
+                  <input type="number" value={schemeCode} onChange={e => { setSchemeCode(e.target.value); setFundDetails(null); }} onBlur={handleCodeBlur} placeholder="e.g., 122639" className="flex-1 p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500" required />
+                  <button type="button" onClick={handleCodeBlur} disabled={fetchingFund || !schemeCode.trim()} className="px-4 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50">
                     {fetchingFund ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
                   </button>
                 </div>
@@ -463,54 +410,29 @@ export default function MutualFundsPage() {
               {fundDetails && (
                 <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                   <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">{fundDetails.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    NAV: ₹{fundDetails.nav.toFixed(2)} • {fmtDate(fundDetails.date)}
-                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">NAV: ₹{fundDetails.nav.toFixed(2)} • {fmtDate(fundDetails.date)}</p>
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Invested Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={investedAmount}
-                    onChange={e => setInvestedAmount(e.target.value)}
-                    placeholder="5000"
-                    className="w-full p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    required
-                    disabled={!fundDetails}
-                  />
+                  <input type="number" value={investedAmount} onChange={e => setInvestedAmount(e.target.value)} placeholder="5000" className="w-full p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500" required disabled={!fundDetails} />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Units</label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={units}
-                    onChange={e => setUnits(e.target.value)}
-                    placeholder="10.5"
-                    className="w-full p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    required
-                    disabled={!fundDetails}
-                  />
+                  <input type="number" step="0.001" value={units} onChange={e => setUnits(e.target.value)} placeholder="10.5" className="w-full p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500" required disabled={!fundDetails} />
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading || !fundDetails}
-                className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
+              <button type="submit" disabled={loading || !fundDetails} className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
                 {loading ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
                 {loading ? 'Adding...' : 'Add Fund'}
               </button>
             </form>
 
             <div className="px-4 pb-4">
-              <p className="text-xs text-gray-400 text-center">
-                Find codes at <a href="https://www.amfiindia.com" target="_blank" rel="noopener" className="text-green-600 hover:underline">amfiindia.com</a>
-              </p>
+              <p className="text-xs text-gray-400 text-center">Find codes at <a href="https://www.amfiindia.com" target="_blank" rel="noopener" className="text-green-600 hover:underline">amfiindia.com</a></p>
             </div>
           </div>
         </div>
@@ -519,10 +441,7 @@ export default function MutualFundsPage() {
       {/* Edit Fund Modal */}
       {showEditModal && editingFund && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowEditModal(false)}>
-          <div 
-            className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Fund</h3>
               <button onClick={() => setShowEditModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
@@ -533,67 +452,27 @@ export default function MutualFundsPage() {
             <form onSubmit={handleSaveEdit} className="p-4 space-y-4">
               <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">{editingFund.fundName}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Code: {editingFund.schemeCode} • NAV: ₹{editingFund.nav.toFixed(2)}
-                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Code: {editingFund.schemeCode} • NAV: ₹{editingFund.nav.toFixed(2)}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Invested Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={editAmount}
-                    onChange={e => setEditAmount(e.target.value)}
-                    className="w-full p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    required
-                  />
+                  <input type="number" value={editAmount} onChange={e => setEditAmount(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500" required />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Units</label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={editUnits}
-                    onChange={e => setEditUnits(e.target.value)}
-                    className="w-full p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    required
-                  />
+                  <input type="number" step="0.001" value={editUnits} onChange={e => setEditUnits(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500" required />
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
+              <button type="submit" className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
                 <Save size={18} /> Save Changes
               </button>
             </form>
           </div>
         </div>
       )}
-
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-3 z-40" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-        <div className="flex justify-around items-center">
-          <a href="/" className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-            <Home size={20} />
-            <span className="text-xs">Home</span>
-          </a>
-          <a href="/mutual-funds" className="flex flex-col items-center gap-1 text-green-500">
-            <TrendingUp size={20} />
-            <span className="text-xs">MF</span>
-          </a>
-          <a href="/nps" className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-            <Shield size={20} />
-            <span className="text-xs">NPS</span>
-          </a>
-          <a href="/fd" className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-            <Percent size={20} />
-            <span className="text-xs">FD</span>
-          </a>
-        </div>
-      </nav>
     </div>
   );
 }
