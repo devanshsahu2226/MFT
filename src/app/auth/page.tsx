@@ -50,8 +50,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4 overflow-hidden">
-      <div className="w-full max-w-md">
+    <div className="fixed inset-0 bg-gray-50 dark:bg-gray-900 flex items-center justify-center overflow-hidden">
+      <div className="w-full max-w-md p-4">
         {/* Logo */}
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -62,7 +62,7 @@ export default function LoginPage() {
         </div>
 
         {/* Login Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 max-h-[calc(100vh-200px)] overflow-y-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Sign In</h2>
 
           {error && (
@@ -87,12 +87,10 @@ export default function LoginPage() {
                   className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
                   required
                   minLength={3}
-                  pattern="[a-zA-Z0-9_]+"
-                  title="Only letters, numbers and underscores"
                   autoComplete="username"
+                  inputMode="text"
                 />
               </div>
-              <p className="text-xs text-gray-400 mt-1">3+ characters, letters/numbers only</p>
             </div>
 
             {/* Password */}
@@ -113,14 +111,13 @@ export default function LoginPage() {
                   autoComplete="current-password"
                 />
               </div>
-              <p className="text-xs text-gray-400 mt-1">4+ characters</p>
             </div>
 
             {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 mt-6"
             >
               {loading ? (
                 <>
