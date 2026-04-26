@@ -10,9 +10,9 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (username: string) => void;
+  login: (username: string, password: string) => { success: boolean; error?: string };
   logout: () => void;
-  register: (username: string, joinedDate: string) => void;
+  register: (username: string, password: string, joinedDate: string) => { success: boolean; error?: string };
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,14 +33,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = (username: string) => {
+  const login = (username: string, password: string) => {
     const users = JSON.parse(localStorage.getItem('mutualtrack-users') || '[]');
     const foundUser = users.find((u: any) => u.username === username);
     
-    if (foundUser) {
-      setUser({ username: foundUser.username, joinedDate: foundUser.joinedDate });
-      localStorage.setItem('mutualtrack-user', JSON.stringify({ username: foundUser.username, joinedDate: foundUser.joinedDate }));
+    if (!foundUser) {
+      return { success: false, error: 'User not registered. Please create an account first.' };
     }
+    
+    if (foundUser.password !== password) {
+      return { success: false, error: 'Invalid password. Please try again.' };
+    }
+    
+    setUser({ username: foundUser.username, joinedDate: foundUser.joinedDate });
+    localStorage.setItem('mutualtrack-user', JSON.stringify({ username: foundUser.username, joinedDate: foundUser.joinedDate }));
+    return { success: true };
   };
 
   const logout = () => {
@@ -49,19 +56,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = '/auth';
   };
 
-  const register = (username: string, joinedDate: string) => {
+  const register = (username: string, password: string, joinedDate: string) => {
     const users = JSON.parse(localStorage.getItem('mutualtrack-users') || '[]');
     
     if (users.find((u: any) => u.username === username)) {
-      throw new Error('Username already exists');
+      return { success: false, error: 'Username already exists. Please choose another.' };
     }
     
-    const newUser = { username, joinedDate };
+    const newUser = { username, password, joinedDate };
     users.push(newUser);
     localStorage.setItem('mutualtrack-users', JSON.stringify(users));
     
-    setUser({ username, joinedDate });
-    localStorage.setItem('mutualtrack-user', JSON.stringify({ username, joinedDate }));
+    return { success: true };
   };
 
   if (!mounted) {

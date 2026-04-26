@@ -1,10 +1,11 @@
 "use client";
-import { TrendingUp, TrendingDown, RefreshCw, Home, Shield, Percent, IndianRupee } from 'lucide-react';
+
 import { useState, useEffect } from 'react';
+import { TrendingUp, TrendingDown, RefreshCw, Home, Shield, Percent, IndianRupee } from 'lucide-react';
 import Link from 'next/link';
 import ProfileModal from '@/components/ProfileModal';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation'; 
+import { useRouter } from 'next/navigation';
 
 interface MFData {
   investedAmount: number;
@@ -22,18 +23,8 @@ interface FDData {
 }
 
 export default function HomePage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const router = useRouter();
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/auth');
-    }
-  }, [isAuthenticated, router]);
-
-  if (!isAuthenticated) {
-    return null;
-  }
   const [currentTime, setCurrentTime] = useState('');
   const [animated, setAnimated] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,6 +34,14 @@ export default function HomePage() {
   const [npsData, setNpsData] = useState<NPSData>({ totalInvested: 0, schemes: [] });
   const [fdData, setFdData] = useState<FDData>({ principalAmount: 0, maturityAmount: 0 });
 
+  // Auth Protection
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/auth');
+    }
+  }, [isAuthenticated, router]);
+
+  // Load Portfolio Data
   useEffect(() => {
     loadData();
     const handleStorageChange = () => loadData();
@@ -76,6 +75,7 @@ export default function HomePage() {
     } catch (e) { console.error('Error loading portfolio data', e); }
   };
 
+  // Clock
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
@@ -86,19 +86,23 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Animation
   useEffect(() => { setAnimated(true); }, []);
 
+  // Refresh Handler
   const handleRefresh = () => {
     setRefreshing(true);
     loadData();
     setTimeout(() => setRefreshing(false), 1000);
   };
 
+  // Calculate Totals
   const totalInvested = mfData.investedAmount + npsData.totalInvested + fdData.principalAmount;
   const totalCurrent = mfData.currentValue + (npsData.schemes.reduce((sum, s) => sum + (s.units * s.nav), 0)) + fdData.maturityAmount;
   const totalProfitLoss = totalCurrent - totalInvested;
   const totalReturnPercent = totalInvested > 0 ? (totalProfitLoss / totalInvested) * 100 : 0;
 
+  // Allocation for Donut Chart
   const mfAllocation = totalCurrent > 0 ? (mfData.currentValue / totalCurrent) * 100 : 0;
   const npsAllocation = totalCurrent > 0 ? ((npsData.schemes.reduce((sum, s) => sum + (s.units * s.nav), 0)) / totalCurrent) * 100 : 0;
   const fdAllocation = totalCurrent > 0 ? (fdData.maturityAmount / totalCurrent) * 100 : 0;
@@ -108,6 +112,7 @@ export default function HomePage() {
   const npsOffset = circumference - (npsAllocation / 100) * circumference;
   const fdOffset = circumference - (fdAllocation / 100) * circumference;
 
+  // Format Helpers
   const fmtMoney = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
   const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
   const fmtCompact = (n: number) => {
@@ -116,8 +121,15 @@ export default function HomePage() {
     return `₹${n.toLocaleString('en-IN')}`;
   };
 
+  // Show loading/null if not authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      
+      {/* Fixed Header */}
       <header className="fixed top-0 left-0 right-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-40" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-center justify-between mb-3">
@@ -126,10 +138,10 @@ export default function HomePage() {
                 <TrendingUp className="text-white" size={20} />
               </button>
               <div>
-                <h1 className="text-lg font-bold text-gray-900 dark:text-white">MutualTrack</h1>
+                <h1 className="text-lg font-bold text-gray-900 dark:text-white">Mutual Fund Tracker</h1>
                 <p className="text-xs text-green-500 flex items-center gap-1">
                   <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                  sureshkumar
+                  @{user?.username || 'Guest'}
                 </p>
               </div>
             </div>
@@ -137,6 +149,8 @@ export default function HomePage() {
               <RefreshCw className={`w-5 h-5 text-gray-600 dark:text-gray-300 ${refreshing ? 'animate-spin' : ''}`} size={20} />
             </button>
           </div>
+
+          {/* Nifty 50 Card */}
           <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
             <div className="flex items-center justify-between">
               <div>
@@ -151,18 +165,23 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+
           <div className="flex items-center justify-end text-xs text-gray-500 dark:text-gray-400 gap-1 mt-2">
             <RefreshCw size={12} /> Last updated: {currentTime}
           </div>
         </div>
       </header>
 
+      {/* Scrollable Main Content */}
       <main className="pt-[140px] pb-28 px-4 space-y-4" style={{ paddingBottom: 'max(100px, calc(24px + env(safe-area-inset-bottom)))' }}>
+        
+        {/* Greeting */}
         <div>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">Good morning, sureshkumar</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Good morning, @{user?.username || 'Guest'}</p>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Portfolio Overview</h2>
         </div>
 
+        {/* Animated Donut Chart Card */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="flex justify-center mb-6">
             <div className="relative w-48 h-48">
@@ -201,6 +220,7 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* Stats Cards */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4">
             <p className="text-xs text-gray-500 dark:text-gray-400">Invested</p>
@@ -219,7 +239,9 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* Category Cards */}
         <div className="grid grid-cols-2 gap-3 mb-4">
+          {/* Mutual Funds */}
           {(() => {
             const mfProfit = mfData.currentValue - mfData.investedAmount;
             const isProfit = mfProfit >= 0;
@@ -234,6 +256,8 @@ export default function HomePage() {
               </div>
             );
           })()}
+          
+          {/* NPS */}
           {(() => {
             const npsCurrent = npsData.schemes.reduce((sum, s) => sum + (s.units * s.nav), 0);
             const npsProfit = npsCurrent - npsData.totalInvested;
@@ -249,6 +273,8 @@ export default function HomePage() {
               </div>
             );
           })()}
+          
+          {/* FD */}
           {(() => {
             const fdProfit = fdData.maturityAmount - fdData.principalAmount;
             const isProfit = fdProfit >= 0;
@@ -263,6 +289,8 @@ export default function HomePage() {
               </div>
             );
           })()}
+          
+          {/* Total Return */}
           <div className={`rounded-xl p-4 border ${totalProfitLoss >= 0 ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'}`}>
             <div className="flex items-center gap-2 mb-2">
               {totalProfitLoss >= 0 ? <TrendingUp size={16} className="text-blue-600 dark:text-blue-400" /> : <TrendingDown size={16} className="text-red-600 dark:text-red-400" />}
@@ -274,6 +302,7 @@ export default function HomePage() {
         </div>
       </main>
 
+      {/* Fixed Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-3 z-40" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
         <div className="flex justify-around items-center">
           <Link href="/" className="flex flex-col items-center gap-1 text-green-500">
@@ -295,6 +324,7 @@ export default function HomePage() {
         </div>
       </nav>
 
+      {/* Profile Modal */}
       <ProfileModal isOpen={showProfile} onClose={() => setShowProfile(false)} totalAssets={totalCurrent} />
     </div>
   );

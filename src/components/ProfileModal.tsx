@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, Settings, Palette, Mail, Info, Moon, Sun, Check, Shield } from 'lucide-react';
 
@@ -14,13 +13,25 @@ interface ProfileModalProps {
 export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: ProfileModalProps) {
   const [mounted, setMounted] = useState(false);
   const [showThemeOptions, setShowThemeOptions] = useState(false);
-  const { theme, toggleTheme } = useTheme();
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const { logout, user } = useAuth();
 
+  // Mount check
   useEffect(() => {
     setMounted(true);
+    
+    // Get theme from localStorage directly (no context dependency)
+    try {
+      const saved = localStorage.getItem('mutualtrack-theme');
+      if (saved === 'light' || saved === 'dark') {
+        setTheme(saved);
+      }
+    } catch (e) {
+      // ignore
+    }
   }, []);
 
+  // Escape key handler
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -32,6 +43,7 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
     return () => window.removeEventListener('keydown', handleEsc);
   }, [isOpen, onClose]);
 
+  // Logout handler
   const handleLogout = () => {
     if (confirm('Are you sure you want to logout?')) {
       logout();
@@ -39,12 +51,30 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
     }
   };
 
+  // Theme toggle handler (direct localStorage, no context)
+  const handleThemeChange = (newTheme: 'light' | 'dark') => {
+    setTheme(newTheme);
+    setShowThemeOptions(false);
+    
+    // Apply theme directly
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(newTheme);
+    
+    try {
+      localStorage.setItem('mutualtrack-theme', newTheme);
+    } catch (e) {
+      console.log('localStorage error:', e);
+    }
+  };
+
+  // Format helper
   const fmtCompact = (n: number) => {
     if (n >= 10000000) return `₹${(n / 10000000).toFixed(2)}Cr`;
     if (n >= 100000) return `₹${(n / 100000).toFixed(2)}L`;
     return `₹${n.toLocaleString('en-IN')}`;
   };
 
+  // Don't render until mounted
   if (!mounted || !isOpen) return null;
 
   return (
@@ -74,7 +104,7 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
               </span>
             </div>
             <div className="flex-1">
-              <p className="font-semibold text-gray-900 dark:text-white">@{user?.username || 'sureshkumar'}</p>
+              <p className="font-semibold text-gray-900 dark:text-white">@{user?.username || 'Guest'}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Member since {user?.joinedDate || '2024'}
               </p>
@@ -106,7 +136,7 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
               </svg>
             </button>
 
-            {/* App Theme Button - Simple Toggle */}
+            {/* App Theme Button */}
             <button 
               onClick={() => setShowThemeOptions(!showThemeOptions)}
               className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -129,7 +159,7 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
             {showThemeOptions && (
               <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl space-y-2">
                 <button
-                  onClick={() => theme === 'dark' && toggleTheme()}
+                  onClick={() => handleThemeChange('light')}
                   className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${theme === 'light' ? 'bg-white dark:bg-gray-600 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-gray-600/50'}`}
                 >
                   <Sun size={18} className="text-yellow-500" />
@@ -141,7 +171,7 @@ export default function ProfileModal({ isOpen, onClose, totalAssets = 0 }: Profi
                 </button>
 
                 <button
-                  onClick={() => theme === 'light' && toggleTheme()}
+                  onClick={() => handleThemeChange('dark')}
                   className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${theme === 'dark' ? 'bg-white dark:bg-gray-600 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-gray-600/50'}`}
                 >
                   <Moon size={18} className="text-indigo-500" />
