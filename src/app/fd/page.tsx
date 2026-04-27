@@ -49,14 +49,14 @@ export default function FDPage() {
   const [editPrincipal, setEditPrincipal] = useState('');
   const [editRate, setEditRate] = useState('');
 
-  // ✅ Load from Google Sheets on mount
+  // Load from Google Sheets on mount
   useEffect(() => {
     if (isAuthenticated && user?.username) {
       loadFDData();
     }
   }, [isAuthenticated, user?.username]);
 
-  // ✅ Auto-sync with Home page
+  // Auto-sync with Home page
   useEffect(() => {
     const handleStorageChange = () => loadFDData();
     window.addEventListener('storage', handleStorageChange);
@@ -68,7 +68,7 @@ export default function FDPage() {
     };
   }, []);
 
-  // ✅ Load from Google Sheets (with safe array handling)
+  // Load from Google Sheets (with safe array handling)
   const loadFDData = async () => {
     try {
       const result = await loadPortfolio();
@@ -100,7 +100,7 @@ export default function FDPage() {
     }
   };
 
-  // ✅ Save to Google Sheets + localStorage
+  // Save to Google Sheets + localStorage
   const saveFDData = async (newFds: FD[]) => {
     try {
       await savePortfolio('fd', newFds);
@@ -113,7 +113,7 @@ export default function FDPage() {
     }
   };
 
-  // ✅ Safe calculations
+  // Safe calculations
   const safeFds = Array.isArray(fds) ? fds : [];
   const totalPrincipal = safeFds.reduce((sum, fd) => sum + fd.principalAmount, 0);
   const totalMaturity = safeFds.reduce((sum, fd) => sum + fd.maturityAmount, 0);
@@ -209,9 +209,14 @@ export default function FDPage() {
     }
   };
 
+  // ✅ FIXED: Accept both Date and string
+  const fmtDate = (d: string | Date) => {
+    const dateObj = typeof d === 'string' ? new Date(d) : d;
+    return dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
   const fmtMoney = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
   const fmtPct = (n: number) => `${n.toFixed(2)}%`;
-  const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -285,6 +290,11 @@ export default function FDPage() {
               const fdKey = fd.id || `${fd.bankName}-${fd.startDate}-${index}`;
               const interest = fd.maturityAmount - fd.principalAmount;
               
+              // ✅ FIXED: Calculate maturity date properly
+              const startDateObj = new Date(fd.startDate);
+              const maturityDateObj = new Date(startDateObj.setMonth(startDateObj.getMonth() + fd.tenureMonths));
+              const maturityDateStr = maturityDateObj.toISOString().split('T')[0];
+              
               return (
                 <div key={fdKey} className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
                   <div className="flex items-start justify-between gap-3 mb-3">
@@ -312,7 +322,7 @@ export default function FDPage() {
                     <div className="text-right">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Maturity Date</p>
                       <p className="font-medium text-gray-900 dark:text-white">
-                        {fmtDate(new Date(new Date(fd.startDate).setMonth(new Date(fd.startDate).getMonth() + fd.tenureMonths)))}
+                        {fmtDate(maturityDateStr)}
                       </p>
                     </div>
                   </div>
