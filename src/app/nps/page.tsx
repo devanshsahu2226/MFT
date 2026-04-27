@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react'; // ✅ useRef added
+import { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Edit2, RefreshCw, Home, Shield, Percent, X, Check, ChevronRight, ChevronLeft, AlertCircle, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import ProfileModal from '@/components/ProfileModal';
@@ -68,7 +68,7 @@ export default function NPSPage() {
   
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   
-  // ✅ FIX: Ref to prevent infinite loop during background sync
+  // ✅ FIX: Ref to prevent infinite loop
   const isSyncingRef = useRef(false);
 
   useEffect(() => {
@@ -77,15 +77,14 @@ export default function NPSPage() {
     }
   }, [isAuthenticated, user?.username]);
 
-  // ✅ Auto-sync with storage events (with loop prevention)
+  // ✅ Auto-sync with storage events
   useEffect(() => {
     const handleStorageChange = () => {
-      // ✅ Skip if we're already syncing (prevents infinite loop)
       if (isSyncingRef.current) {
         console.log('⏭️ loadNPSData: Skipping - already syncing');
         return;
       }
-      console.log('🔍 MF Page: Storage change detected, reloading...');
+      console.log('🔍 NPS Page: Storage change detected, reloading...');
       loadNPSData();
     };
     window.addEventListener('storage', handleStorageChange);
@@ -97,46 +96,58 @@ export default function NPSPage() {
     };
   }, []);
 
-  // ✅ CACHE-FIRST: Load from localStorage instantly, then sync with Google Sheets
+  // ✅ FIXED: Load NPS Data with proper parsing
   const loadNPSData = async () => {
     console.log('🔍 loadNPSData: Starting (Cache-First)...');
     
-    // ✅ STEP 1: Load from localStorage IMMEDIATELY (Instant UI)
+    // ✅ STEP 1: Load from localStorage IMMEDIATELY
     const saved = localStorage.getItem('nps_portfolio');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        console.log('⚡ loadNPSData: Showing cached data instantly');
+        console.log('⚡ loadNPSData: Showing cached data:', parsed);
         setNpsData(parsed);
       } catch (e) {
         console.error('❌ loadNPSData: Cache parse error:', e);
+        localStorage.removeItem('nps_portfolio');
       }
     }
     
-    // ✅ STEP 2: Fetch from Google Sheet in BACKGROUND (No UI blocking)
+    // ✅ STEP 2: Fetch from Google Sheet in BACKGROUND
     try {
-      // ✅ Set syncing flag to prevent infinite loop
       isSyncingRef.current = true;
       
       const result = await loadPortfolio();
-      
-      console.log('🔄 loadNPSData: Background API result:', result);
+      console.log('🔄 loadNPSData: API result:', result);
       
       if (result.success && result.portfolio && Array.isArray(result.portfolio)) {
-        const npsEntry = result.portfolio.find((p: any) => p.type === 'nps');
+        const npsEntry = result.portfolio.find((p: any) => p?.type === 'nps');
+        console.log('🔍 loadNPSData: NPS Entry:', npsEntry);
         
         if (npsEntry && npsEntry.data) {
-          console.log('🔄 loadNPSData: Updating with fresh data');
-          setNpsData(npsEntry.data);
-          localStorage.setItem('nps_portfolio', JSON.stringify(npsEntry.data));
-          // ✅ Don't dispatch storage event here to avoid re-triggering
+          let parsedData: NPSData | null = null;
+          
+          // ✅ Handle different data formats
+          if (typeof npsEntry.data === 'string') {
+            console.log('🔍 loadNPSData: Data is string, parsing...');
+            parsedData = JSON.parse(npsEntry.data);
+          } else if (typeof npsEntry.data === 'object' && npsEntry.data !== null) {
+            console.log('🔍 loadNPSData: Data is object');
+            parsedData = npsEntry.data as NPSData;
+          }
+          
+          if (parsedData && parsedData.schemes && Array.isArray(parsedData.schemes)) {
+            console.log('✅ loadNPSData: Valid NPS data loaded:', parsedData);
+            setNpsData(parsedData);
+            localStorage.setItem('nps_portfolio', JSON.stringify(parsedData));
+          } else {
+            console.log('⚠️ loadNPSData: Invalid data structure');
+          }
         }
       }
     } catch (e: unknown) {
       console.error('❌ loadNPSData: Background fetch error:', e);
-      // Keep showing cached data if API fails
     } finally {
-      // ✅ Reset syncing flag after background sync completes
       isSyncingRef.current = false;
     }
   };
@@ -144,23 +155,17 @@ export default function NPSPage() {
   // ✅ Save to Google Sheets + localStorage
   const saveNPSData = async (data: NPSData) => {
     try {
+      console.log('📡 saveNPSData: Saving NPS data');
       await savePortfolio('nps', data);
       localStorage.setItem('nps_portfolio', JSON.stringify(data));
-      // ✅ Dispatch storage event to sync other tabs (but not this one due to ref check)
       window.dispatchEvent(new Event('storage'));
+      console.log('✅ saveNPSData: Saved successfully');
     } catch (e) {
-      console.error('Save NPS error:', e);
+      console.error('❌ saveNPSData: Error:', e);
       localStorage.setItem('nps_portfolio', JSON.stringify(data));
       window.dispatchEvent(new Event('storage'));
     }
   };
-
-  useEffect(() => {
-    if (npsData) {
-      localStorage.setItem('nps_portfolio', JSON.stringify(npsData));
-      // ✅ Don't dispatch here to avoid loop - only dispatch on save
-    }
-  }, [npsData]);
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -219,13 +224,11 @@ export default function NPSPage() {
     try {
       console.log('📡 Fetching NAV for:', code);
       
-      // Call Apps Script function
       const result = await gsApiCall('get-nps-nav', { code });
       
       if (result.success && result.data) {
         console.log('✅ NAV fetched:', result.data.nav);
         
-        // Update scheme with fetched NAV
         setSchemes(prev => ({
           ...prev,
           [schemeName]: { 

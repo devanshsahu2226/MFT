@@ -26,7 +26,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
-  // Check auth on mount
   useEffect(() => {
     const savedUser = localStorage.getItem('mutualtrack-user');
     if (savedUser) {
@@ -40,7 +39,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ✅ Login
   const login = async (username: string, password: string) => {
     console.log('📡 login: Attempting login for:', username);
     
@@ -62,7 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ✅ Register
   const register = async (username: string, password: string, joinedDate: string) => {
     console.log('📡 register: Attempting registration for:', username);
     
@@ -76,7 +73,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ✅ Logout
   const logout = () => {
     setUser(null);
     setIsAuthenticated(false);
@@ -87,7 +83,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('✅ logout: Success');
   };
 
-  // ✅ Save Portfolio
   const savePortfolio = async (type: string, data: any) => {
     console.log('📡 savePortfolio: Saving', type, 'portfolio');
     
@@ -105,7 +100,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ✅ Load Portfolio
   const loadPortfolio = async () => {
     console.log('📡 loadPortfolio: Loading for user:', user?.username);
     
@@ -119,7 +113,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ✅ Forgot Password (3 parameters)
   const forgotPassword = async (username: string, joinedDate: string, newPassword: string) => {
     console.log('📡 forgotPassword: Request for user:', username);
     
@@ -137,7 +130,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ✅ Change Password (4 parameters)
   const changePassword = async (username: string, currentPassword: string, newPassword: string, joinedDate: string) => {
     console.log('📡 changePassword: Request for user:', username);
     
@@ -175,7 +167,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ✅ Hook to use auth context
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
