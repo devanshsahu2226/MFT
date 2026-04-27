@@ -70,35 +70,39 @@ export default function FDPage() {
 
   // Load from Google Sheets (with safe array handling)
   const loadFDData = async () => {
+  console.log('🔍 loadFDData: Starting...');
+  
+  // ✅ Step 1: Load from localStorage IMMEDIATELY
+  const saved = localStorage.getItem('fd_portfolio');
+  if (saved) {
     try {
-      const result = await loadPortfolio();
-      if (result.success && result.portfolio && Array.isArray(result.portfolio)) {
-        const fdData = result.portfolio.find((p: any) => p.type === 'fd');
-        if (fdData && fdData.data && Array.isArray(fdData.data)) {
-          setFds(fdData.data);
-          localStorage.setItem('fd_portfolio', JSON.stringify(fdData.data));
-          return;
-        }
-      }
-      
-      // Fallback to localStorage
-      const saved = localStorage.getItem('fd_portfolio');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setFds(parsed);
-        } else {
-          setFds([]);
-        }
-      } else {
-        setFds([]);
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        console.log('⚡ loadFDData: Showing cached data instantly:', parsed.length, 'FDs');
+        setFds(parsed);
       }
     } catch (e) {
-      console.error('Load error:', e);
-      localStorage.removeItem('fd_portfolio');
-      setFds([]);
+      console.error('Cache parse error:', e);
     }
-  };
+  }
+  
+  // ✅ Step 2: Fetch from Google Sheet in background
+  try {
+    const result = await loadPortfolio();
+    
+    if (result.success && result.portfolio && Array.isArray(result.portfolio)) {
+      const fdEntry = result.portfolio.find((p: any) => p.type === 'fd');
+      
+      if (fdEntry && fdEntry.data && Array.isArray(fdEntry.data)) {
+        console.log('🔄 loadFDData: Updating with fresh data:', fdEntry.data.length, 'FDs');
+        setFds(fdEntry.data);
+        localStorage.setItem('fd_portfolio', JSON.stringify(fdEntry.data));
+      }
+    }
+  } catch (e) {
+    console.error('❌ loadFDData: Background fetch error:', e);
+  }
+};
 
   // Save to Google Sheets + localStorage
   const saveFDData = async (newFds: FD[]) => {

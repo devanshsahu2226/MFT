@@ -31,7 +31,7 @@ interface NiftyData {
 }
 
 export default function HomePage() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, loadPortfolio } = useAuth(); // ✅ loadPortfolio added here
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState('');
   const [animated, setAnimated] = useState(false);
@@ -57,7 +57,7 @@ export default function HomePage() {
     }
   }, [isAuthenticated, router]);
 
-  // Load Portfolio Data
+  // Load Portfolio Data (Cache-First Strategy)
   useEffect(() => {
     loadData();
     const handleStorageChange = () => loadData();
@@ -88,7 +88,7 @@ export default function HomePage() {
         console.log('⚠️ Nifty fetch failed:', result.error);
         setNiftyData(prev => ({ ...prev, loading: false }));
       }
-    } catch (e) {
+    } catch (e: unknown) { // ✅ Type annotation added
       console.error('❌ Error fetching Nifty:', e);
       setNiftyData(prev => ({ ...prev, loading: false }));
     }
@@ -101,9 +101,12 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
+  // ✅ CACHE-FIRST: Load from localStorage instantly, then sync with Google Sheets
   const loadData = () => {
+    console.log('⚡ loadData: Loading from cache instantly...');
+    
     try {
-      // MF Data
+      // ✅ MF Data - Instant from localStorage
       const mfSaved = localStorage.getItem('mf_tracker_funds');
       if (mfSaved) {
         const mfFunds = JSON.parse(mfSaved);
@@ -114,7 +117,7 @@ export default function HomePage() {
         }
       }
       
-      // NPS Data
+      // ✅ NPS Data - Instant from localStorage
       const npsSaved = localStorage.getItem('nps_portfolio');
       if (npsSaved) {
         const parsed = JSON.parse(npsSaved);
@@ -126,7 +129,7 @@ export default function HomePage() {
         }
       }
       
-      // FD Data
+      // ✅ FD Data - Instant from localStorage
       const fdSaved = localStorage.getItem('fd_portfolio');
       if (fdSaved) {
         const fdFunds = JSON.parse(fdSaved);
@@ -136,8 +139,20 @@ export default function HomePage() {
           setFdData({ principalAmount: invested, maturityAmount: current });
         }
       }
-    } catch (e) { 
-      console.error('Error loading portfolio data', e); 
+      
+      console.log('✅ loadData: Cache loaded instantly!');
+      
+      // ✅ Background: Fresh data fetch from Google Sheet
+      loadPortfolio().then((result: { success: boolean; portfolio?: any[]; error?: string }) => { // ✅ Type annotation added
+        if (result.success && result.portfolio) {
+          console.log('🔄 loadData: Background sync completed');
+          // Trigger storage event to update all pages
+          window.dispatchEvent(new Event('storage'));
+        }
+      }).catch((e: unknown) => console.error('Background sync error:', e)); // ✅ Type annotation added
+      
+    } catch (e: unknown) { // ✅ Type annotation added
+      console.error('Error loading cache data', e); 
     }
   };
 
@@ -229,7 +244,7 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* ✅ Nifty 50 Card - From Google Sheet (GOOGLEFINANCE) */}
+          {/* ✅ Nifty 50 Card - Dynamic from Google Sheet */}
           <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
             {niftyData.loading ? (
               <div className="flex items-center justify-center py-4">

@@ -83,84 +83,55 @@ export default function MutualFundsPage() {
     };
   }, []);
 
-  // ✅ FIXED: Load function with proper type matching
+  // ✅ CACHE-FIRST: Load from localStorage instantly, then sync with Google Sheets
   const loadMFData = async () => {
-  console.log('🔍 loadMFData: Starting...');
-  
-  try {
-    const result = await loadPortfolio();
+    console.log('🔍 loadMFData: Starting (Cache-First)...');
     
-    console.log('🔍 loadMFData: API result:', result);
-    
-    if (result.success && result.portfolio && Array.isArray(result.portfolio)) {
-      console.log('🔍 loadMFData: Portfolio entries:', result.portfolio);
-      
-      const mfEntry = result.portfolio.find((p: any) => p?.type === 'mutual-funds');
-      
-      console.log('🔍 loadMFData: MF Entry:', mfEntry);
-      console.log('🔍 loadMFData: mfEntry exists?', !!mfEntry);
-      console.log('🔍 loadMFData: mfEntry.data exists?', !!mfEntry?.data);
-      console.log('🔍 loadMFData: mfEntry.data type:', typeof mfEntry?.data);
-      console.log('🔍 loadMFData: mfEntry.data value:', mfEntry?.data);
-      
-      if (mfEntry && mfEntry.data !== undefined && mfEntry.data !== null) {
-        console.log('✅ loadMFData: Processing data...');
-        
-        let fundsData: Fund[] = [];
-        
-        if (typeof mfEntry.data === 'string') {
-          console.log('🔍 loadMFData: Data is string, parsing...');
-          try {
-            fundsData = JSON.parse(mfEntry.data);
-            console.log('✅ loadMFData: Parsed string to array');
-          } catch (e) {
-            console.error('❌ loadMFData: JSON parse error:', e);
-            fundsData = [];
-          }
-        } else if (Array.isArray(mfEntry.data)) {
-          console.log('✅ loadMFData: Data already array');
-          fundsData = mfEntry.data;
-        } else if (typeof mfEntry.data === 'object' && mfEntry.data !== null) {
-          console.log('⚠️ loadMFData: Data is object but not array, converting...');
-          fundsData = [mfEntry.data];
-        } else {
-          console.log('⚠️ loadMFData: Unexpected data format, using empty array');
-          fundsData = [];
-        }
-        
-        console.log('✅ loadMFData: Final funds array:', fundsData);
-        setFunds(fundsData);
-        localStorage.setItem('mf_tracker_funds', JSON.stringify(fundsData));
-        return;
-      } else {
-        console.log('❌ loadMFData: mfEntry or mfEntry.data is missing/null/undefined');
-      }
-    }
-    
-    // Fallback to localStorage
-    console.log('⚠️ loadMFData: Trying localStorage fallback');
+    // ✅ STEP 1: Load from localStorage IMMEDIATELY (Instant UI)
     const saved = localStorage.getItem('mf_tracker_funds');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          console.log('✅ loadMFData: Loaded from localStorage:', parsed.length, 'funds');
+          console.log('⚡ loadMFData: Showing cached data instantly:', parsed.length, 'funds');
           setFunds(parsed);
-          return;
         }
       } catch (e) {
-        console.error('❌ loadMFData: localStorage parse error:', e);
+        console.error('❌ loadMFData: Cache parse error:', e);
       }
     }
     
-    console.log('❌ loadMFData: No data found anywhere, setting empty array');
-    setFunds([]);
-    
-  } catch (e) {
-    console.error('❌ loadMFData: Error:', e);
-    setFunds([]);
-  }
-};
+    // ✅ STEP 2: Fetch from Google Sheet in BACKGROUND (No UI blocking)
+    try {
+      const result = await loadPortfolio();
+      
+      console.log('🔄 loadMFData: Background API result:', result);
+      
+      if (result.success && result.portfolio && Array.isArray(result.portfolio)) {
+        const mfEntry = result.portfolio.find((p: any) => p?.type === 'mutual-funds');
+        
+        if (mfEntry && mfEntry.data !== undefined && mfEntry.data !== null) {
+          let fundsData: Fund[] = [];
+          
+          if (typeof mfEntry.data === 'string') {
+            fundsData = JSON.parse(mfEntry.data);
+          } else if (Array.isArray(mfEntry.data)) {
+            fundsData = mfEntry.data;
+          } else if (typeof mfEntry.data === 'object' && mfEntry.data !== null) {
+            fundsData = [mfEntry.data];
+          }
+          
+          console.log('🔄 loadMFData: Updating with fresh data:', fundsData.length, 'funds');
+          setFunds(fundsData);
+          localStorage.setItem('mf_tracker_funds', JSON.stringify(fundsData));
+          window.dispatchEvent(new Event('storage')); // Sync other tabs
+        }
+      }
+    } catch (e) {
+      console.error('❌ loadMFData: Background fetch error:', e);
+      // Keep showing cached data if API fails
+    }
+  };
 
   // ✅ Save to Google Sheets + localStorage
   const saveMFData = async (newFunds: Fund[]) => {
@@ -346,7 +317,6 @@ export default function MutualFundsPage() {
   const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
   const fmtDate = (d: string) => {
     if (!d) return '';
-    // Handle both "24-04-2026" and "2026-04-24" formats
     const parts = d.includes('-') ? d.split('-') : d.split('/');
     if (parts.length === 3) {
       return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });

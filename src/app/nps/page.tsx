@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, RefreshCw, Home, Shield, Percent, X, Check, ChevronRight, ChevronLeft, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react'; // ✅ useRef added
+import { Plus, Trash2, Edit2, RefreshCw, Home, Shield, Percent, X, Check, ChevronRight, ChevronLeft, AlertCircle, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import ProfileModal from '@/components/ProfileModal';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import { gsApiCall } from '@/lib/googleSheetsApi';
 
 interface Scheme {
   name: 'E' | 'C' | 'G';
@@ -23,15 +24,6 @@ interface NPSData {
   schemes: Scheme[];
   createdAt: string;
 }
-
-const NPS_FALLBACK_NAV: Record<string, { nav: number; date: string }> = {
-  'SM001003': { nav: 68.42, date: new Date().toISOString().split('T')[0] },
-  'SM001004': { nav: 45.23, date: new Date().toISOString().split('T')[0] },
-  'SM001005': { nav: 52.18, date: new Date().toISOString().split('T')[0] },
-  'IC001001': { nav: 72.15, date: new Date().toISOString().split('T')[0] },
-  'IC001002': { nav: 48.90, date: new Date().toISOString().split('T')[0] },
-  'IC001003': { nav: 55.32, date: new Date().toISOString().split('T')[0] },
-};
 
 const SCHEME_INFO = {
   E: { name: 'Equity', color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-800' },
@@ -73,6 +65,11 @@ export default function NPSPage() {
   const [editInvestedValue, setEditInvestedValue] = useState('');
   const [editingUnits, setEditingUnits] = useState<Record<string, boolean>>({ E: false, C: false, G: false });
   const [editUnitsValue, setEditUnitsValue] = useState<Record<string, string>>({ E: '', C: '', G: '' });
+  
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  
+  // ✅ FIX: Ref to prevent infinite loop during background sync
+  const isSyncingRef = useRef(false);
 
   useEffect(() => {
     if (isAuthenticated && user?.username) {
@@ -80,50 +77,76 @@ export default function NPSPage() {
     }
   }, [isAuthenticated, user?.username]);
 
-  const loadNPSData = async () => {
-  console.log('🔍 loadNPSData: Starting...');
-  console.log('🔍 loadNPSData: Current user:', user?.username);
-  
-  try {
-    const result = await loadPortfolio();
-    
-    console.log('🔍 loadNPSData: loadPortfolio result:', result);
-    console.log('🔍 loadNPSData: result.success:', result?.success);
-    console.log('🔍 loadNPSData: result.portfolio:', result?.portfolio);
-    
-    if (result.success && result.portfolio && Array.isArray(result.portfolio)) {
-      const npsEntry = result.portfolio.find((p: any) => p.type === 'nps');
-      
-      console.log('🔍 loadNPSData: NPS Entry found:', npsEntry);
-      
-      if (npsEntry && npsEntry.data) {
-        console.log('✅ loadNPSData: Setting npsData:', npsEntry.data);
-        setNpsData(npsEntry.data);
-        localStorage.setItem('nps_portfolio', JSON.stringify(npsEntry.data));
+  // ✅ Auto-sync with storage events (with loop prevention)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      // ✅ Skip if we're already syncing (prevents infinite loop)
+      if (isSyncingRef.current) {
+        console.log('⏭️ loadNPSData: Skipping - already syncing');
         return;
+      }
+      console.log('🔍 MF Page: Storage change detected, reloading...');
+      loadNPSData();
+    };
+    window.addEventListener('storage', handleStorageChange);
+    const handleFocus = () => loadNPSData();
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  // ✅ CACHE-FIRST: Load from localStorage instantly, then sync with Google Sheets
+  const loadNPSData = async () => {
+    console.log('🔍 loadNPSData: Starting (Cache-First)...');
+    
+    // ✅ STEP 1: Load from localStorage IMMEDIATELY (Instant UI)
+    const saved = localStorage.getItem('nps_portfolio');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        console.log('⚡ loadNPSData: Showing cached data instantly');
+        setNpsData(parsed);
+      } catch (e) {
+        console.error('❌ loadNPSData: Cache parse error:', e);
       }
     }
     
-    console.log('⚠️ loadNPSData: No NPS data from Sheets, trying localStorage');
-    const saved = localStorage.getItem('nps_portfolio');
-    console.log('⚠️ loadNPSData: localStorage ', saved);
-    
-    if (saved) {
-      setNpsData(JSON.parse(saved));
-    } else {
-      console.log('❌ loadNPSData: No data anywhere, setting null');
-      setNpsData(null);
+    // ✅ STEP 2: Fetch from Google Sheet in BACKGROUND (No UI blocking)
+    try {
+      // ✅ Set syncing flag to prevent infinite loop
+      isSyncingRef.current = true;
+      
+      const result = await loadPortfolio();
+      
+      console.log('🔄 loadNPSData: Background API result:', result);
+      
+      if (result.success && result.portfolio && Array.isArray(result.portfolio)) {
+        const npsEntry = result.portfolio.find((p: any) => p.type === 'nps');
+        
+        if (npsEntry && npsEntry.data) {
+          console.log('🔄 loadNPSData: Updating with fresh data');
+          setNpsData(npsEntry.data);
+          localStorage.setItem('nps_portfolio', JSON.stringify(npsEntry.data));
+          // ✅ Don't dispatch storage event here to avoid re-triggering
+        }
+      }
+    } catch (e: unknown) {
+      console.error('❌ loadNPSData: Background fetch error:', e);
+      // Keep showing cached data if API fails
+    } finally {
+      // ✅ Reset syncing flag after background sync completes
+      isSyncingRef.current = false;
     }
-  } catch (e) {
-    console.error('❌ loadNPSData: Error:', e);
-    setNpsData(null);
-  }
-};
+  };
 
+  // ✅ Save to Google Sheets + localStorage
   const saveNPSData = async (data: NPSData) => {
     try {
       await savePortfolio('nps', data);
       localStorage.setItem('nps_portfolio', JSON.stringify(data));
+      // ✅ Dispatch storage event to sync other tabs (but not this one due to ref check)
       window.dispatchEvent(new Event('storage'));
     } catch (e) {
       console.error('Save NPS error:', e);
@@ -135,7 +158,7 @@ export default function NPSPage() {
   useEffect(() => {
     if (npsData) {
       localStorage.setItem('nps_portfolio', JSON.stringify(npsData));
-      window.dispatchEvent(new Event('storage'));
+      // ✅ Don't dispatch here to avoid loop - only dispatch on save
     }
   }, [npsData]);
 
@@ -157,32 +180,81 @@ export default function NPSPage() {
   const totalProfitLoss = totalCurrentValue - safeTotalInvested;
   const totalReturnPercent = safeTotalInvested > 0 ? (totalProfitLoss / safeTotalInvested) * 100 : 0;
 
-  const fetchNav = async (code: string): Promise<{ nav: number; date: string } | null> => {
+  // ✅ Fetch NAV from npsnav.in via Apps Script proxy
+  const fetchNav = async (code: string): Promise<{ name: string; nav: number; date: string } | null> => {
     try {
-      const res = await fetch(`https://api.mfapi.in/mf/${code}`, { cache: 'no-store' });
-      if (res.ok) {
-        const json = await res.json();
-        return { nav: parseFloat(json.data[0].nav), date: json.data[0].date };
+      console.log('📡 Fetching NPS NAV from proxy for code:', code);
+      
+      const result = await gsApiCall('get-nps-nav', { code });
+      
+      if (result.success && result.data) {
+        console.log('✅ NPS NAV fetched:', result.data);
+        return {
+          name: result.data.name,
+          nav: result.data.nav,
+          date: result.data.date,
+        };
+      } else {
+        console.log('⚠️ NAV fetch failed:', result.error);
+        return null;
       }
-    } catch (e) { console.log('API failed'); }
-    return NPS_FALLBACK_NAV[code] || null;
+    } catch (e) {
+      console.error('❌ NAV fetch error:', e);
+      return null;
+    }
   };
 
+  // ✅ handleCodeBlur - Fetch NAV when user enters scheme code
   const handleCodeBlur = async (schemeName: 'E' | 'C' | 'G') => {
     const code = schemes[schemeName].code.trim();
-    if (!code || code.length < 6) return;
-    setFetchingNav(schemeName);
-    const data = await fetchNav(code);
-    if (data) {
-      setSchemes(prev => ({ ...prev, [schemeName]: { ...prev[schemeName], nav: data.nav, navDate: data.date } }));
-      setMessage(`${schemeName} NAV fetched!`);
-      setTimeout(() => setMessage(null), 2000);
+    if (!code || code.length < 6) {
+      setError('Please enter a valid scheme code');
+      setTimeout(() => setError(null), 3000);
+      return;
     }
+    
+    setFetchingNav(schemeName);
+    setError(null);
+    
+    try {
+      console.log('📡 Fetching NAV for:', code);
+      
+      // Call Apps Script function
+      const result = await gsApiCall('get-nps-nav', { code });
+      
+      if (result.success && result.data) {
+        console.log('✅ NAV fetched:', result.data.nav);
+        
+        // Update scheme with fetched NAV
+        setSchemes(prev => ({
+          ...prev,
+          [schemeName]: { 
+            ...prev[schemeName], 
+            nav: result.data.nav, 
+            navDate: result.data.date 
+          },
+        }));
+        
+        setMessage(`${schemeName}: NAV ₹${result.data.nav} fetched!`);
+        setTimeout(() => setMessage(null), 3000);
+      } else {
+        setError(`${schemeName}: ${result.error || 'NAV fetch failed'}`);
+        setTimeout(() => setError(null), 4000);
+      }
+    } catch (e) {
+      console.error('❌ NAV fetch error:', e);
+      setError(`${schemeName}: Network error`);
+      setTimeout(() => setError(null), 4000);
+    }
+    
     setFetchingNav(null);
   };
 
   const handleAllocationChange = (schemeName: 'E' | 'C' | 'G', value: number) => {
-    setSchemes(prev => ({ ...prev, [schemeName]: { ...prev[schemeName], allocation: value } }));
+    setSchemes(prev => ({
+      ...prev,
+      [schemeName]: { ...prev[schemeName], allocation: value },
+    }));
   };
 
   const totalAllocation = Object.values(schemes).reduce((sum, s) => sum + s.allocation, 0);
@@ -200,25 +272,54 @@ export default function NPSPage() {
       setTotalInvested(npsData.totalInvested.toString());
       const schemeMap: Record<string, any> = {};
       npsData.schemes.forEach(s => {
-        schemeMap[s.name] = { code: s.code, nav: s.nav, navDate: s.navDate, units: s.units, allocation: s.allocation };
+        schemeMap[s.name] = {
+          code: s.code,
+          nav: s.nav,
+          navDate: s.navDate,
+          units: s.units,
+          allocation: s.allocation,
+        };
       });
       setSchemes(schemeMap);
     } else {
       setTotalInvested('');
-      setSchemes({ E: { code: '', nav: 0, navDate: '', units: 0, allocation: 33.33 }, C: { code: '', nav: 0, navDate: '', units: 0, allocation: 33.33 }, G: { code: '', nav: 0, navDate: '', units: 0, allocation: 33.34 } });
+      setSchemes({
+        E: { code: '', nav: 0, navDate: '', units: 0, allocation: 33.33 },
+        C: { code: '', nav: 0, navDate: '', units: 0, allocation: 33.33 },
+        G: { code: '', nav: 0, navDate: '', units: 0, allocation: 33.34 },
+      });
     }
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    if (!canProceedStep3) { setError('Please complete all steps'); return; }
+    if (!canProceedStep3) {
+      setError('Please complete all steps');
+      return;
+    }
+
     setLoading(true);
+    
     const newSchemes: Scheme[] = (['E', 'C', 'G'] as const).map(name => ({
-      name, fullName: SCHEME_INFO[name].name, code: schemes[name].code, nav: schemes[name].nav, navDate: schemes[name].navDate, units: schemes[name].units, allocation: schemes[name].allocation, investedAmount: (parseFloat(totalInvested) * schemes[name].allocation) / 100,
+      name,
+      fullName: SCHEME_INFO[name].name,
+      code: schemes[name].code,
+      nav: schemes[name].nav,
+      navDate: schemes[name].navDate,
+      units: schemes[name].units,
+      allocation: schemes[name].allocation,
+      investedAmount: (parseFloat(totalInvested) * schemes[name].allocation) / 100,
     }));
-    const newData: NPSData = { totalInvested: parseFloat(totalInvested), schemes: newSchemes, createdAt: isEditing ? npsData?.createdAt || new Date().toISOString() : new Date().toISOString() };
+
+    const newData: NPSData = {
+      totalInvested: parseFloat(totalInvested),
+      schemes: newSchemes,
+      createdAt: isEditing ? npsData?.createdAt || new Date().toISOString() : new Date().toISOString(),
+    };
+
     setNpsData(newData);
     await saveNPSData(newData);
+    
     setLoading(false);
     setShowModal(false);
     setMessage(isEditing ? 'NPS portfolio updated!' : 'NPS portfolio created!');
@@ -226,8 +327,10 @@ export default function NPSPage() {
   };
 
   const handleDelete = async () => {
-    if (confirm('Are you sure?')) {
-      try { await savePortfolio('nps', null as any); } catch (e) {}
+    if (confirm('Are you sure you want to delete your NPS portfolio? This cannot be undone.')) {
+      try {
+        await savePortfolio('nps', null as any);
+      } catch (e) {}
       setNpsData(null);
       localStorage.removeItem('nps_portfolio');
       setMessage('NPS portfolio deleted');
@@ -235,46 +338,109 @@ export default function NPSPage() {
     }
   };
 
-  const handleRefreshAll = async () => {
-    if (!npsData || !Array.isArray(npsData.schemes) || npsData.schemes.length === 0) return;
+  const refreshAllNAV = async () => {
+    if (!npsData || !Array.isArray(npsData.schemes) || npsData.schemes.length === 0) {
+      setError('No portfolio to refresh');
+      setTimeout(() => setError(null), 2000);
+      return;
+    }
+    
     setLoading(true);
-    setMessage('Updating all NAVs...');
-    const updatedSchemes = await Promise.all(npsData.schemes.map(async (s) => {
-      const data = await fetchNav(s.code);
-      return data ? { ...s, nav: data.nav, navDate: data.date } : s;
-    }));
-    const updatedData = { ...npsData, schemes: updatedSchemes };
-    setNpsData(updatedData);
-    await saveNPSData(updatedData);
+    setMessage('🔄 Fetching latest NAV from API...');
+    
+    try {
+      const updatedSchemes = await Promise.all(
+        npsData.schemes.map(async (scheme) => {
+          const code = scheme.code;
+          const data = await fetchNav(code);
+          
+          if (data) {
+            return { ...scheme, nav: data.nav, navDate: data.date };
+          }
+          return scheme;
+        })
+      );
+      
+      const updatedData = { ...npsData, schemes: updatedSchemes };
+      setNpsData(updatedData);
+      await saveNPSData(updatedData);
+      setLastRefreshed(new Date());
+      
+      setMessage('✅ All NAVs updated successfully!');
+      setTimeout(() => setMessage(null), 3000);
+    } catch (e) {
+      console.error('Refresh error:', e);
+      setError('Failed to refresh NAVs. Please try again.');
+      setTimeout(() => setError(null), 3000);
+    }
+    
     setLoading(false);
-    setMessage('All NAVs updated!');
-    setTimeout(() => setMessage(null), 3000);
   };
 
   const handleRefreshNav = async (schemeName: 'E' | 'C' | 'G') => {
     if (!npsData || !Array.isArray(npsData.schemes)) return;
+    
     setFetchingNav(schemeName);
     const scheme = npsData.schemes.find(s => s.name === schemeName);
-    if (!scheme) { setFetchingNav(null); return; }
-    const data = await fetchNav(scheme.code);
+    if (!scheme) {
+      setFetchingNav(null);
+      return;
+    }
+    
+    const code = scheme.code;
+    console.log(`📡 Fetching ${schemeName} NAV for code:`, code);
+    
+    const data = await fetchNav(code);
+    
     if (data) {
-      const updatedSchemes = npsData.schemes.map(s => s.name === schemeName ? { ...s, nav: data.nav, navDate: data.date } : s);
-      setNpsData({ ...npsData, schemes: updatedSchemes });
-      await saveNPSData({ ...npsData, schemes: updatedSchemes });
-      setMessage('NAV updated!');
+      const updatedSchemes = npsData.schemes.map(s => 
+        s.name === schemeName ? { ...s, nav: data.nav, navDate: data.date } : s
+      );
+      const updatedData = { ...npsData, schemes: updatedSchemes };
+      setNpsData(updatedData);
+      await saveNPSData(updatedData);
+      setLastRefreshed(new Date());
+      
+      setMessage(`${schemeName} NAV updated!`);
       setTimeout(() => setMessage(null), 2000);
+    } else {
+      setError(`${schemeName} NAV fetch failed`);
+      setTimeout(() => setError(null), 3000);
     }
     setFetchingNav(null);
   };
 
-  const handleEditInvested = () => { if (!npsData) return; setEditingInvested(true); setEditInvestedValue(npsData.totalInvested.toString()); };
+  const handleFullRefresh = async () => {
+    setLoading(true);
+    setMessage('🔄 Refreshing page data...');
+    await loadNPSData();
+    await refreshAllNAV();
+    setTimeout(() => {
+      setLoading(false);
+      setMessage('✅ Page refreshed!');
+      setTimeout(() => setMessage(null), 2000);
+    }, 1000);
+  };
+
+  const handleEditInvested = () => {
+    if (!npsData) return;
+    setEditingInvested(true);
+    setEditInvestedValue(npsData.totalInvested.toString());
+  };
 
   const handleSaveInvested = async () => {
     if (!npsData || !Array.isArray(npsData.schemes) || !editInvestedValue) return;
+    
     const newAmount = parseFloat(editInvestedValue);
-    const updatedSchemes = npsData.schemes.map(s => ({ ...s, investedAmount: (newAmount * s.allocation) / 100 }));
-    setNpsData({ ...npsData, totalInvested: newAmount, schemes: updatedSchemes as Scheme[] });
-    await saveNPSData({ ...npsData, totalInvested: newAmount, schemes: updatedSchemes as Scheme[] });
+    const updatedSchemes = npsData.schemes.map(s => ({
+      ...s,
+      investedAmount: (newAmount * s.allocation) / 100,
+    }));
+    
+    const updatedData = { ...npsData, totalInvested: newAmount, schemes: updatedSchemes as Scheme[] };
+    setNpsData(updatedData);
+    await saveNPSData(updatedData);
+    
     setEditingInvested(false);
     setMessage('Invested amount updated!');
     setTimeout(() => setMessage(null), 2000);
@@ -282,19 +448,28 @@ export default function NPSPage() {
 
   const handleEditUnits = (schemeName: 'E' | 'C' | 'G') => {
     if (!npsData || !Array.isArray(npsData.schemes)) return;
+    
     const scheme = npsData.schemes.find(s => s.name === schemeName);
     if (!scheme) return;
+    
     setEditingUnits(prev => ({ ...prev, [schemeName]: true }));
     setEditUnitsValue(prev => ({ ...prev, [schemeName]: scheme.units.toString() }));
   };
 
   const handleSaveUnits = async (schemeName: 'E' | 'C' | 'G') => {
     if (!npsData || !Array.isArray(npsData.schemes)) return;
+    
     const newUnits = parseFloat(editUnitsValue[schemeName]);
     if (!newUnits || newUnits <= 0) return;
-    const updatedSchemes = npsData.schemes.map(s => s.name === schemeName ? { ...s, units: newUnits } : s);
-    setNpsData({ ...npsData, schemes: updatedSchemes as Scheme[] });
-    await saveNPSData({ ...npsData, schemes: updatedSchemes as Scheme[] });
+    
+    const updatedSchemes = npsData.schemes.map(s => 
+      s.name === schemeName ? { ...s, units: newUnits } : s
+    );
+    
+    const updatedData = { ...npsData, schemes: updatedSchemes as Scheme[] };
+    setNpsData(updatedData);
+    await saveNPSData(updatedData);
+    
     setEditingUnits(prev => ({ ...prev, [schemeName]: false }));
     setMessage('Units updated!');
     setTimeout(() => setMessage(null), 2000);
@@ -302,10 +477,19 @@ export default function NPSPage() {
 
   const fmtMoney = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
   const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
-  const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const fmtDate = (d: string) => {
+    if (!d) return '';
+    const parts = d.includes('-') ? d.split('-') : d.split('/');
+    if (parts.length === 3) {
+      return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    }
+    return d;
+  };
+  const fmtTime = (d: Date) => d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      
       <header className="fixed top-0 left-0 right-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-40" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-center justify-between">
@@ -315,15 +499,25 @@ export default function NPSPage() {
               </button>
               <div>
                 <h1 className="text-lg font-bold">NPS Portfolio</h1>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{npsData ? 'Portfolio Active' : 'No portfolio yet'}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {npsData ? 'Portfolio Active' : 'No portfolio yet'}
+                </p>
+                {lastRefreshed && (
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                    Last refresh: {fmtTime(lastRefreshed)}
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {npsData && Array.isArray(npsData.schemes) && npsData.schemes.length > 0 && (
-                <button onClick={handleRefreshAll} disabled={loading} className="p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50">
-                  <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                </button>
-              )}
+              <button 
+                onClick={handleFullRefresh} 
+                disabled={loading || !npsData} 
+                className="p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                title="Refresh NAV (Click to update)"
+              >
+                <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
               <button onClick={() => openModal(false)} className="p-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors">
                 <Plus size={20} />
               </button>
@@ -333,11 +527,19 @@ export default function NPSPage() {
       </header>
 
       <main className="pt-[100px] pb-24 px-4 space-y-4" style={{ paddingBottom: 'max(24px, calc(24px + env(safe-area-inset-bottom)))' }}>
+        
         {message && (
           <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-600 dark:text-green-400 text-sm flex items-center gap-2">
             <Check size={14} /> {message}
           </div>
         )}
+
+        {error && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm flex items-center gap-2">
+            <AlertCircle size={14} /> {error}
+          </div>
+        )}
+
         {!npsData ? (
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 text-center border border-gray-200 dark:border-gray-700">
             <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -379,9 +581,11 @@ export default function NPSPage() {
                 <p className={`text-lg font-bold ${totalReturnPercent >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{fmtPct(totalReturnPercent)}</p>
               </div>
             </div>
+
             <button onClick={handleDelete} className="w-full py-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2">
               <Trash2 size={14} /> Delete Portfolio
             </button>
+
             <div className="space-y-3">
               {safeSchemes.length > 0 ? (
                 safeSchemes.map((scheme) => {
@@ -390,6 +594,7 @@ export default function NPSPage() {
                   const isProfit = profitLoss >= 0;
                   const info = SCHEME_INFO[scheme.name];
                   const isEditingThisUnit = editingUnits[scheme.name];
+                  
                   return (
                     <div key={scheme.name} className={`rounded-2xl p-4 border ${info.bg} ${info.border}`}>
                       <div className="flex items-center justify-between mb-3">
@@ -402,10 +607,16 @@ export default function NPSPage() {
                             <p className="text-xs text-gray-500 dark:text-gray-400">{scheme.code}</p>
                           </div>
                         </div>
-                        <button onClick={() => handleRefreshNav(scheme.name)} disabled={fetchingNav === scheme.name} className="p-2 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors disabled:opacity-50">
+                        <button 
+                          onClick={() => handleRefreshNav(scheme.name)} 
+                          disabled={fetchingNav === scheme.name} 
+                          className="p-2 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors disabled:opacity-50"
+                          title="Refresh NAV"
+                        >
                           <RefreshCw className={`w-4 h-4 ${fetchingNav === scheme.name ? 'animate-spin' : ''}`} />
                         </button>
                       </div>
+                      
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <p className="text-xs text-gray-500 dark:text-gray-400">NAV</p>
@@ -441,7 +652,9 @@ export default function NPSPage() {
                         <div className="col-span-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                           <div className="flex items-center justify-between">
                             <p className="text-xs text-gray-500 dark:text-gray-400">Profit/Loss</p>
-                            <p className={`font-bold ${isProfit ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{isProfit ? '+' : ''}{fmtMoney(profitLoss)} ({fmtPct((profitLoss / (scheme?.investedAmount || 1)) * 100)})</p>
+                            <p className={`font-bold ${isProfit ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {isProfit ? '+' : ''}{fmtMoney(profitLoss)} ({fmtPct((profitLoss / (scheme?.investedAmount || 1)) * 100)})
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -463,7 +676,7 @@ export default function NPSPage() {
             <span className="text-xs">Home</span>
           </Link>
           <Link href="/mutual-funds" className="flex flex-col items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-            <Plus size={20} />
+            <TrendingUp size={20} />
             <span className="text-xs">MF</span>
           </Link>
           <Link href="/nps" className="flex flex-col items-center gap-1 text-indigo-500">
@@ -531,13 +744,32 @@ export default function NPSPage() {
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Scheme Code</label>
-                          <input type="text" value={schemes[name].code} onChange={e => setSchemes(prev => ({ ...prev, [name]: { ...prev[name], code: e.target.value } }))} onBlur={() => handleCodeBlur(name)} placeholder="e.g., SM001003" className="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          <input 
+                            type="text" 
+                            value={schemes[name].code} 
+                            onChange={e => setSchemes(prev => ({ ...prev, [name]: { ...prev[name], code: e.target.value } }))} 
+                            onBlur={() => handleCodeBlur(name)} 
+                            placeholder="e.g., SM001003" 
+                            className="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                          />
                         </div>
                         <div>
                           <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">NAV</label>
                           <div className="flex items-center gap-1">
-                            <input type="number" value={schemes[name].nav || ''} onChange={e => setSchemes(prev => ({ ...prev, [name]: { ...prev[name], nav: parseFloat(e.target.value) || 0 } }))} placeholder="Auto" className="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" step="0.01" />
-                            <button type="button" onClick={() => handleCodeBlur(name)} disabled={fetchingNav === name || !schemes[name].code} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50">
+                            <input 
+                              type="number" 
+                              value={schemes[name].nav || ''} 
+                              onChange={e => setSchemes(prev => ({ ...prev, [name]: { ...prev[name], nav: parseFloat(e.target.value) || 0 } }))} 
+                              placeholder="Auto" 
+                              className="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                              step="0.01" 
+                            />
+                            <button 
+                              type="button" 
+                              onClick={() => handleCodeBlur(name)} 
+                              disabled={fetchingNav === name || !schemes[name].code} 
+                              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50"
+                            >
                               <RefreshCw className={`w-4 h-4 ${fetchingNav === name ? 'animate-spin' : ''}`} />
                             </button>
                           </div>
