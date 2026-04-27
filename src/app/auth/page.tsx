@@ -29,40 +29,47 @@ export default function LoginPage() {
   }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  e.preventDefault();
+  setError('');
+  setLoading(true);
 
-    if (!username || !password) {
-      setError('Please fill all fields');
-      setLoading(false);
-      return;
-    }
-
-    if (username.length < 3) {
-      setError('Username must be at least 3 characters');
-      setLoading(false);
-      return;
-    }
-
-    if (password.length < 4) {
-      setError('Password must be at least 4 characters');
-      setLoading(false);
-      return;
-    }
-
-    // Try login
-    const result = login(username, password);
-    
-    if (!result.success) {
-      setError(result.error || 'Login failed');
-      setLoading(false);
-      return;
-    }
-
+  if (!username || !password) {
+    setError('Please fill all fields');
     setLoading(false);
-    router.push('/');
-  };
+    return;
+  }
+
+  if (username.length < 3) {
+    setError('Username must be at least 3 characters');
+    setLoading(false);
+    return;
+  }
+
+  if (password.length < 4) {
+    setError('Password must be at least 4 characters');
+    setLoading(false);
+    return;
+  }
+
+  // Call API via AuthContext
+  const result = await login(username, password);
+  
+  if (!result.success) {
+    setError(result.error || 'Login failed');
+    setLoading(false);
+    return;
+  }
+
+  // Check if coming from registration
+  const registered = sessionStorage.getItem('just-registered');
+  if (registered) {
+    setSuccess('Account created! Welcome.');
+    sessionStorage.removeItem('just-registered');
+  }
+
+  setLoading(false);
+  router.push('/');
+};
 
   return (
     <div className="fixed inset-0 bg-gray-50 dark:bg-gray-900 flex items-center justify-center overflow-hidden">

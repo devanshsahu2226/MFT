@@ -41,45 +41,46 @@ export default function RegisterPage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  e.preventDefault();
+  setError('');
 
-    if (!username || !password || !joinedDate) {
-      setError('Please fill all fields');
-      return;
-    }
+  if (!username || !password || !joinedDate) {
+    setError('Please fill all fields');
+    return;
+  }
 
-    if (username.length < 3) {
-      setError('Username must be at least 3 characters');
-      return;
-    }
+  if (username.length < 3) {
+    setError('Username must be at least 3 characters');
+    return;
+  }
 
-    if (password.length < 4) {
-      setError('Password must be at least 4 characters');
-      return;
-    }
+  if (password.length < 4) {
+    setError('Password must be at least 4 characters');
+    return;
+  }
 
-    if (!validateDate(joinedDate)) {
-      setError('Please enter valid date (DD/MM/YYYY)');
-      return;
-    }
+  if (!validateDate(joinedDate)) {
+    setError('Please enter valid date (DD/MM/YYYY)');
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
 
-    const result = register(username, password, joinedDate);
-    
-    if (!result.success) {
-      setError(result.error || 'Registration failed');
-      setLoading(false);
-      return;
-    }
+  // Call API via AuthContext
+  const result = await register(username, password, joinedDate);
+  
+  if (!result.success) {
+    setError(result.error || 'Registration failed');
+    setLoading(false);
+    return;
+  }
 
-    // Set flag for login page to show success message
-    sessionStorage.setItem('just-registered', 'true');
-    
-    // Redirect to login page (NOT home)
-    router.push('/auth');
-  };
+  // Set flag for login page to show success message
+  sessionStorage.setItem('just-registered', 'true');
+  
+  // Redirect to login page (NOT home)
+  router.push('/auth');
+};
 
   return (
     <div className="fixed inset-0 bg-gray-50 dark:bg-gray-900 flex items-center justify-center overflow-hidden">

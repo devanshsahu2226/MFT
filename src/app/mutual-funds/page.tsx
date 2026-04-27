@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, RefreshCw, Plus, Trash2, Search, Loader2, AlertCircle, Home, Shield, Percent, X, Check, Edit2, Save } from 'lucide-react';
+import { TrendingUp, TrendingDown, Plus, Trash2, Edit2, RefreshCw, Home, Shield, Percent, X, Check, ChevronRight, ChevronLeft, AlertCircle, Save, Search, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import ProfileModal from '@/components/ProfileModal';
 import { useAuth } from '@/context/AuthContext';
@@ -26,7 +26,7 @@ const FALLBACK_FUNDS: Record<string, { name: string; nav: number; date: string }
 };
 
 export default function MutualFundsPage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, savePortfolio, loadPortfolio } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -38,6 +38,7 @@ export default function MutualFundsPage() {
   if (!isAuthenticated) {
     return null;
   }
+
   const [funds, setFunds] = useState<Fund[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState<string | null>(null);
@@ -59,34 +60,127 @@ export default function MutualFundsPage() {
   
   const [searchQuery, setSearchQuery] = useState('');
 
+  // ✅ Load from Google Sheets on mount AND when user changes
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('mf_tracker_funds');
-      if (saved) setFunds(JSON.parse(saved));
-    } catch (e) { console.error('Load error:', e); }
-  }, []);
+    if (isAuthenticated && user?.username) {
+      console.log('🔍 MF Page: Loading data for user:', user.username);
+      loadMFData();
+    }
+  }, [isAuthenticated, user?.username]);
 
+  // ✅ Auto-sync with storage events
   useEffect(() => {
-    try {
-      localStorage.setItem('mf_tracker_funds', JSON.stringify(funds));
-      window.dispatchEvent(new Event('storage'));
-    } catch (e) { console.error('Save error:', e); }
-  }, [funds]);
-
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowAddModal(false);
-        setShowEditModal(false);
-        setShowProfile(false);
-      }
+    const handleStorageChange = () => {
+      console.log('🔍 MF Page: Storage change detected, reloading...');
+      loadMFData();
     };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
+    window.addEventListener('storage', handleStorageChange);
+    const handleFocus = () => loadMFData();
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
-  const totalInvested = funds.reduce((sum, f) => sum + f.investedAmount, 0);
-  const totalCurrentValue = funds.reduce((sum, f) => sum + (f.units * f.nav), 0);
+  // ✅ FIXED: Load function with proper type matching
+  const loadMFData = async () => {
+  console.log('🔍 loadMFData: Starting...');
+  
+  try {
+    const result = await loadPortfolio();
+    
+    console.log('🔍 loadMFData: API result:', result);
+    
+    if (result.success && result.portfolio && Array.isArray(result.portfolio)) {
+      console.log('🔍 loadMFData: Portfolio entries:', result.portfolio);
+      
+      const mfEntry = result.portfolio.find((p: any) => p?.type === 'mutual-funds');
+      
+      console.log('🔍 loadMFData: MF Entry:', mfEntry);
+      console.log('🔍 loadMFData: mfEntry exists?', !!mfEntry);
+      console.log('🔍 loadMFData: mfEntry.data exists?', !!mfEntry?.data);
+      console.log('🔍 loadMFData: mfEntry.data type:', typeof mfEntry?.data);
+      console.log('🔍 loadMFData: mfEntry.data value:', mfEntry?.data);
+      
+      if (mfEntry && mfEntry.data !== undefined && mfEntry.data !== null) {
+        console.log('✅ loadMFData: Processing data...');
+        
+        let fundsData: Fund[] = [];
+        
+        if (typeof mfEntry.data === 'string') {
+          console.log('🔍 loadMFData: Data is string, parsing...');
+          try {
+            fundsData = JSON.parse(mfEntry.data);
+            console.log('✅ loadMFData: Parsed string to array');
+          } catch (e) {
+            console.error('❌ loadMFData: JSON parse error:', e);
+            fundsData = [];
+          }
+        } else if (Array.isArray(mfEntry.data)) {
+          console.log('✅ loadMFData: Data already array');
+          fundsData = mfEntry.data;
+        } else if (typeof mfEntry.data === 'object' && mfEntry.data !== null) {
+          console.log('⚠️ loadMFData: Data is object but not array, converting...');
+          fundsData = [mfEntry.data];
+        } else {
+          console.log('⚠️ loadMFData: Unexpected data format, using empty array');
+          fundsData = [];
+        }
+        
+        console.log('✅ loadMFData: Final funds array:', fundsData);
+        setFunds(fundsData);
+        localStorage.setItem('mf_tracker_funds', JSON.stringify(fundsData));
+        return;
+      } else {
+        console.log('❌ loadMFData: mfEntry or mfEntry.data is missing/null/undefined');
+      }
+    }
+    
+    // Fallback to localStorage
+    console.log('⚠️ loadMFData: Trying localStorage fallback');
+    const saved = localStorage.getItem('mf_tracker_funds');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          console.log('✅ loadMFData: Loaded from localStorage:', parsed.length, 'funds');
+          setFunds(parsed);
+          return;
+        }
+      } catch (e) {
+        console.error('❌ loadMFData: localStorage parse error:', e);
+      }
+    }
+    
+    console.log('❌ loadMFData: No data found anywhere, setting empty array');
+    setFunds([]);
+    
+  } catch (e) {
+    console.error('❌ loadMFData: Error:', e);
+    setFunds([]);
+  }
+};
+
+  // ✅ Save to Google Sheets + localStorage
+  const saveMFData = async (newFunds: Fund[]) => {
+    try {
+      console.log('📡 saveMFData: Saving', newFunds.length, 'funds');
+      await savePortfolio('mutual-funds', newFunds);
+      localStorage.setItem('mf_tracker_funds', JSON.stringify(newFunds));
+      window.dispatchEvent(new Event('storage'));
+      console.log('✅ saveMFData: Saved successfully');
+    } catch (e) {
+      console.error('❌ saveMFData: Error:', e);
+      localStorage.setItem('mf_tracker_funds', JSON.stringify(newFunds));
+      window.dispatchEvent(new Event('storage'));
+    }
+  };
+
+  // ✅ Safe calculations
+  const safeFunds = Array.isArray(funds) ? funds : [];
+  const totalInvested = safeFunds.reduce((sum, f) => sum + (f?.investedAmount || 0), 0);
+  const totalCurrentValue = safeFunds.reduce((sum, f) => sum + ((f?.units || 0) * (f?.nav || 0)), 0);
   const totalProfitLoss = totalCurrentValue - totalInvested;
   const totalReturnPercent = totalInvested > 0 ? (totalProfitLoss / totalInvested) * 100 : 0;
 
@@ -108,7 +202,7 @@ export default function MutualFundsPage() {
   const handleCodeBlur = async () => {
     if (!schemeCode.trim() || schemeCode.length < 5) return;
     setFetchingFund(true);
-    setFundDetails(null);
+    setError(null);
     const data = await fetchFundData(schemeCode.trim());
     if (data) {
       setFundDetails(data);
@@ -119,6 +213,24 @@ export default function MutualFundsPage() {
     }
     setFetchingFund(false);
     setTimeout(() => { setError(null); setMessage(null); }, 4000);
+  };
+
+  const openModal = (fund: Fund | null = null) => {
+    setEditingFund(fund);
+    setError(null);
+    setMessage(null);
+    if (fund) {
+      setSchemeCode(fund.schemeCode);
+      setUnits(fund.units.toString());
+      setInvestedAmount(fund.investedAmount.toString());
+      setFundDetails({ name: fund.fundName, nav: fund.nav, date: fund.navDate });
+    } else {
+      setSchemeCode('');
+      setUnits('');
+      setInvestedAmount('');
+      setFundDetails(null);
+    }
+    setShowAddModal(true);
   };
 
   const handleAddFund = async (e: React.FormEvent) => {
@@ -134,25 +246,26 @@ export default function MutualFundsPage() {
     setLoading(true);
     
     const newFund: Fund = {
-      id: Date.now().toString(),
+      id: Date.now().toString() + Math.random().toString(36).slice(2, 7),
       schemeCode: schemeCode.trim(),
-      fundName: fundDetails.name,
-      nav: fundDetails.nav,
-      navDate: fundDetails.date,
-      investedAmount: parseFloat(investedAmount),
-      units: parseFloat(units),
+      fundName: fundDetails.name || 'Unknown Fund',
+      nav: fundDetails.nav || 0,
+      navDate: fundDetails.date || new Date().toISOString(),
+      investedAmount: parseFloat(investedAmount) || 0,
+      units: parseFloat(units) || 0,
     };
 
-    setFunds(prev => [...prev, newFund]);
-    setMessage('Fund added successfully!');
+    const newFunds = [...safeFunds, newFund];
+    setFunds(newFunds);
+    await saveMFData(newFunds);
     
+    setMessage('Fund added successfully!');
     setSchemeCode('');
     setInvestedAmount('');
     setUnits('');
     setFundDetails(null);
     setLoading(false);
     setShowAddModal(false);
-    
     setTimeout(() => setMessage(null), 3000);
   };
 
@@ -163,15 +276,18 @@ export default function MutualFundsPage() {
     setShowEditModal(true);
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingFund || !editAmount || !editUnits) return;
 
-    setFunds(prev => prev.map(f => 
+    const newFunds = safeFunds.map(f => 
       f.id === editingFund.id 
         ? { ...f, investedAmount: parseFloat(editAmount), units: parseFloat(editUnits) }
         : f
-    ));
+    );
+    
+    setFunds(newFunds);
+    await saveMFData(newFunds);
     
     setMessage('Fund updated successfully!');
     setShowEditModal(false);
@@ -179,9 +295,11 @@ export default function MutualFundsPage() {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this fund?')) {
-      setFunds(prev => prev.filter(f => f.id !== id));
+      const newFunds = safeFunds.filter(f => f.id !== id);
+      setFunds(newFunds);
+      await saveMFData(newFunds);
       setMessage('Fund removed');
       setTimeout(() => setMessage(null), 2000);
     }
@@ -191,9 +309,11 @@ export default function MutualFundsPage() {
     setRefreshing(fund.schemeCode);
     const data = await fetchFundData(fund.schemeCode);
     if (data) {
-      setFunds(prev => prev.map(f => 
+      const newFunds = safeFunds.map(f => 
         f.id === fund.id ? { ...f, nav: data.nav, navDate: data.date } : f
-      ));
+      );
+      setFunds(newFunds);
+      await saveMFData(newFunds);
       setMessage('NAV updated from API!');
       setTimeout(() => setMessage(null), 2000);
     } else {
@@ -204,18 +324,19 @@ export default function MutualFundsPage() {
   };
 
   const handleRefreshAll = async () => {
-    if (funds.length === 0) return;
+    if (safeFunds.length === 0) return;
     setLoading(true);
     setMessage('Updating all NAVs...');
     
     const updated = await Promise.all(
-      funds.map(async (f) => {
+      safeFunds.map(async (f) => {
         const data = await fetchFundData(f.schemeCode);
         return data ? { ...f, nav: data.nav, navDate: data.date } : f;
       })
     );
     
     setFunds(updated);
+    await saveMFData(updated);
     setLoading(false);
     setMessage('All NAVs updated!');
     setTimeout(() => setMessage(null), 3000);
@@ -223,12 +344,22 @@ export default function MutualFundsPage() {
 
   const fmtMoney = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
   const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
-  const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  const fmtDate = (d: string) => {
+    if (!d) return '';
+    // Handle both "24-04-2026" and "2026-04-24" formats
+    const parts = d.includes('-') ? d.split('-') : d.split('/');
+    if (parts.length === 3) {
+      return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    }
+    return d;
+  };
 
-  const filtered = funds.filter(f => 
-    f.fundName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    f.schemeCode.includes(searchQuery)
-  );
+  const filtered = safeFunds.filter(f => {
+    const fundName = (f?.fundName || '').toLowerCase();
+    const schemeCode = (f?.schemeCode || '').toLowerCase();
+    const query = (searchQuery || '').toLowerCase();
+    return fundName.includes(query) || schemeCode.includes(query);
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -242,14 +373,14 @@ export default function MutualFundsPage() {
               </button>
               <div>
                 <h1 className="text-lg font-bold">Mutual Funds</h1>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{funds.length} funds</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{safeFunds.length} funds</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setShowAddModal(true)} className="p-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-colors">
+              <button onClick={() => openModal(null)} className="p-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-colors">
                 <Plus size={20} />
               </button>
-              <button onClick={handleRefreshAll} disabled={loading || funds.length === 0} className="p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50">
+              <button onClick={handleRefreshAll} disabled={loading || safeFunds.length === 0} className="p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50">
                 <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
               </button>
             </div>
@@ -259,6 +390,18 @@ export default function MutualFundsPage() {
 
       <main className="pt-[100px] pb-24 px-4 space-y-4" style={{ paddingBottom: 'max(24px, calc(24px + env(safe-area-inset-bottom)))' }}>
         
+        {message && (
+          <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-600 dark:text-green-400 text-sm flex items-center gap-2">
+            <Check size={14} /> {message}
+          </div>
+        )}
+
+        {error && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm flex items-center gap-2">
+            <AlertCircle size={14} /> {error}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-500 dark:text-gray-400">Invested</p>
@@ -282,7 +425,7 @@ export default function MutualFundsPage() {
           </div>
         </div>
 
-        {funds.length > 0 && (
+        {safeFunds.length > 0 && (
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search funds..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm" />
@@ -291,26 +434,27 @@ export default function MutualFundsPage() {
 
         {filtered.length > 0 ? (
           <div className="space-y-3">
-            {filtered.map(fund => {
-              const current = fund.units * fund.nav;
-              const pl = current - fund.investedAmount;
+            {filtered.map((fund, index) => {
+              const fundKey = fund?.id || `${fund?.schemeCode}-${fund?.navDate}-${index}`;
+              const current = (fund?.units || 0) * (fund?.nav || 0);
+              const pl = current - (fund?.investedAmount || 0);
               const isProfit = pl >= 0;
               
               return (
-                <div key={fund.id} className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
+                <div key={fundKey} className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2">{fund.fundName}</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{fund.schemeCode}</p>
+                      <h3 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2">{fund?.fundName || 'Unknown Fund'}</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{fund?.schemeCode}</p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      <button onClick={() => handleRefresh(fund)} disabled={refreshing === fund.schemeCode} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50">
-                        <RefreshCw className={`w-4 h-4 ${refreshing === fund.schemeCode ? 'animate-spin' : ''}`} />
+                      <button onClick={() => handleRefresh(fund)} disabled={refreshing === fund?.schemeCode} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50">
+                        <RefreshCw className={`w-4 h-4 ${refreshing === fund?.schemeCode ? 'animate-spin' : ''}`} />
                       </button>
                       <button onClick={() => handleEditClick(fund)} className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
                         <Edit2 size={14} />
                       </button>
-                      <button onClick={() => handleDelete(fund.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                      <button onClick={() => handleDelete(fundKey)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -319,18 +463,18 @@ export default function MutualFundsPage() {
                   <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">NAV</p>
-                      <p className="font-semibold text-green-600 dark:text-green-400">₹{fund.nav.toFixed(2)}</p>
+                      <p className="font-semibold text-green-600 dark:text-green-400">₹{(fund?.nav || 0).toFixed(2)}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Updated</p>
-                      <p className="text-xs text-gray-600 dark:text-gray-300">{fmtDate(fund.navDate)}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-300">{fmtDate(fund?.navDate)}</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">Invested</p>
-                      <p className="font-medium text-gray-900 dark:text-white">{fmtMoney(fund.investedAmount)}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{fmtMoney(fund?.investedAmount || 0)}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Current</p>
@@ -338,7 +482,7 @@ export default function MutualFundsPage() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">Units</p>
-                      <p className="font-medium text-gray-900 dark:text-white">{fund.units.toFixed(3)}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{(fund?.units || 0).toFixed(3)}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-500 dark:text-gray-400">P/L</p>
@@ -351,12 +495,12 @@ export default function MutualFundsPage() {
               );
             })}
           </div>
-        ) : funds.length > 0 ? (
+        ) : safeFunds.length > 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">No funds match your search</div>
         ) : (
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 text-center border border-gray-200 dark:border-gray-700">
             <p className="text-gray-500 dark:text-gray-400 mb-2">No funds added yet</p>
-            <button onClick={() => setShowAddModal(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors">
+            <button onClick={() => openModal(null)} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors">
               <Plus size={16} /> Add Your First Fund
             </button>
             <p className="text-xs text-gray-400 mt-4">Try code: 122639 (HDFC Nifty 50)</p>
@@ -385,7 +529,7 @@ export default function MutualFundsPage() {
         </div>
       </nav>
 
-      <ProfileModal isOpen={showProfile} onClose={() => setShowProfile(false)} totalAssets={totalCurrentValue} />
+      <ProfileModal isOpen={showProfile} onClose={() => setShowProfile(false)} totalAssets={totalCurrentValue || 0} />
 
       {/* Add Fund Modal */}
       {showAddModal && (
@@ -465,8 +609,8 @@ export default function MutualFundsPage() {
 
             <form onSubmit={handleSaveEdit} className="p-4 space-y-4">
               <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">{editingFund.fundName}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Code: {editingFund.schemeCode} • NAV: ₹{editingFund.nav.toFixed(2)}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">{editingFund.fundName || 'Unknown Fund'}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Code: {editingFund.schemeCode} • NAV: ₹{(editingFund.nav || 0).toFixed(2)}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
